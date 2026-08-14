@@ -18,6 +18,8 @@ DSH 需要一个可安装的桌面应用，但 Electron 不能成为第二个组
 
 持久化 profile 以普通 Web template bundle 开头。profile 修复会把必需的 `dsh-base` 与 `dsh-web-app` 前缀放在最前，移除持久化列表中的启动器包，并保持每个第三方 bundle 的相对顺序。启动器把自己的 desktop patch 插入 Web application layer 之后、第三方 layer 之前。profile 本地与整机用户 patch 仍在 bundle layer 之后应用；仅允许 loopback 的 Web server overlay 继续作为启动器最终拥有的安全不变量。
 
+裸插件导入仍以持久化 profile 为解析基准。同步 Node resolve hook 只处理 `@deepseek-ai/cordis-plugin-loader` 发起的裸导入；打包后的 Electron 不暴露 Node 内部 ESM Loader 时，profile 本地第三方依赖与修复后的安装 fallback 仍然可用。
+
 在严格纯新增约束下，本提案收窄了 [GUI 分层与 RPC 协议](../../implemented/architecture/2026-07-19-gui-layering-and-rpc-protocol.md)描述的实现路线，并保留[客户端插件加载模型](../../implemented/architecture/2026-07-23-client-plugin-loading-model.md)。它不取代其中任何一项。以后可以由上游提供 transport-neutral 能力，用 IPC 替换 loopback carrier，而无需改变 profile 所有权或两棵 Cordis 插件树。
 
 ## 备选方案
@@ -38,7 +40,7 @@ DSH 需要一个可安装的桌面应用，但 Electron 不能成为第二个组
 - 浏览器产物以 `dsh-plugin-desktop` 图 id 注册到现有客户端模块 loader，并在 fiber dispose 时清理 renderer marker。
 - renderer 不启用 Node integration，也不获得原始 Electron API；精确同源导航停留在 loopback surface；外部允许链接在应用窗口外打开。
 - npm 启动器的 headless `--help` 与 `--version` 路径无需导入 Electron；普通启动则运行持久化 `desktop` profile。
-- package 级检查会编译两个 face、typecheck 源码与测试、运行 profile 与生命周期聚焦测试，并验证发布文件集合。
+- package 级检查会编译两个 face、typecheck 源码与测试、运行 profile 与生命周期聚焦测试、通过基于构建产物的 headless Loader smoke 激活启动器拥有的插件与 profile 本地插件，并验证发布文件集合。
 - 正式发布前，各原生平台 job 会验证打包后运行时闭包、从已安装 profile 激活第三方 Host 与 client 插件、安装器行为、签名以及平台信任检查。
 - 安装器发布版本要提供显式插件管理路径，无需假设用户另外安装 Node、DSH CLI 或 pnpm 即可安装 profile 依赖。
 

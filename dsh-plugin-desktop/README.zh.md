@@ -12,6 +12,8 @@ Electron 可执行文件只包含最小启动代码。它获取单实例锁、�
 
 启动器只修复由安装方拥有的 profile 前缀。由 `dsh plugin --profile desktop add third-party-plugin` 创建的 profile 会变为 `dsh-base`、`dsh-web-app`，随后是保持原有相对顺序的第三方 bundle。启动器在 `dsh-web-app` 之后插入自己的 desktop layer，但不会把自身持久化到由用户管理的 bundle 列表。
 
+Cordis 的裸插件导入从持久化 profile 解析。一个范围受限的 Node resolve hook 只处理由 `@deepseek-ai/cordis-plugin-loader` 发起的导入，因此即使打包后的 Electron 不暴露 Node 内部 ESM Loader，profile 本地第三方包与修复后的启动器 fallback 仍使用同一条解析路径。
+
 ## 开发
 
 该目录是独立的嵌套 pnpm 项目，因此纯新增实现无需修改父级 DSH workspace。请在该目录中安装依赖并验证：
@@ -20,6 +22,8 @@ Electron 可执行文件只包含最小启动代码。它获取单实例锁、�
 pnpm install
 pnpm run check
 ```
+
+该检查包含一个基于构建产物的 headless Loader smoke，会通过包名分别激活启动器拥有的 desktop row 与 profile 本地第三方 row。
 
 有图形会话时，显式启动桌面应用：
 

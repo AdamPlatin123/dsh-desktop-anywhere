@@ -12,6 +12,8 @@ The first additive release deliberately reuses the current loopback Web carrier.
 
 The launcher repairs only its installation-owned profile prefix. A profile created by `dsh plugin --profile desktop add third-party-plugin` becomes `dsh-base`, `dsh-web-app`, then the same third-party bundles in their previous relative order. The launcher inserts its own desktop layer after `dsh-web-app`; it does not persist itself in the user-managed bundle list.
 
+Bare Cordis plugin imports resolve from the persistent profile. A narrow Node resolve hook applies only to imports issued by `@deepseek-ai/cordis-plugin-loader`, so profile-local third-party packages and the healed launcher fallback use the same resolution path even when packaged Electron does not expose Node's internal ESM loader.
+
 ## Development
 
 This directory is a standalone nested pnpm project so the additive implementation does not modify the parent DSH workspace. Install and verify it from this directory:
@@ -20,6 +22,8 @@ This directory is a standalone nested pnpm project so the additive implementatio
 pnpm install
 pnpm run check
 ```
+
+The check includes a built, headless Loader smoke that activates both the launcher-owned desktop row and a profile-local third-party row by package name.
 
 Start the desktop application explicitly when a graphical session is available:
 

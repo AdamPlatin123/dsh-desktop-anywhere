@@ -11,6 +11,7 @@ import {
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
 import { DSH_LAUNCH_ENVIRONMENT_KEY } from '@deepseek-ai/dsh-launch-environment'
 import { ElectronDesktopRuntime } from './electron-runtime.ts'
+import { installProfilePackageResolver } from './module-resolution.ts'
 import { prepareDesktopProfile } from './profile.ts'
 import { createDesktopShutdown, installShutdownRequests } from './shutdown.ts'
 
@@ -58,12 +59,17 @@ async function start(): Promise<void> {
   try {
     const environment = loadLayeredEnv(BIN_NAME, process.cwd())
     const prepared = prepareDesktopProfile()
+    const releasePackageResolver = installProfilePackageResolver(prepared.bareModuleBaseUrl)
     const ctx = await boot(
       BIN_NAME,
       prepared.rootConfig,
       prepared.patches,
       (hostCtx) => {
         current = hostCtx
+        hostCtx.effect(
+          () => releasePackageResolver,
+          'dsh-plugin-desktop: profile package resolution',
+        )
         hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment)
         hostCtx.provide('desktopRuntime', runtime)
         provideCmdline(hostCtx, {
@@ -71,7 +77,11 @@ async function start(): Promise<void> {
           exit: requestQuit,
         })
       },
-    )
+      prepared.bareModuleBaseUrl,
+    ).catch((cause: unknown) => {
+      releasePackageResolver()
+      throw cause
+    })
     current = ctx
     await runtime.whenMounted()
   } catch (cause) {

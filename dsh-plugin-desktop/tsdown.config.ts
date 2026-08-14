@@ -7,6 +7,7 @@ export default defineConfig([
     name: CLIENT_ID,
     entry: {
       index: 'src/index.ts',
+      'module-resolution': 'src/module-resolution.ts',
       profile: 'src/profile.ts',
       runtime: 'src/runtime.ts',
       'electron-runtime': 'src/electron-runtime.ts',

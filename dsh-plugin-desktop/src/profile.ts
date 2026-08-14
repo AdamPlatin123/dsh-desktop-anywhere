@@ -3,7 +3,7 @@
 import { createRequire } from 'node:module'
 import { existsSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
@@ -53,6 +53,8 @@ export interface PreparedDesktopProfile {
   profile: Profile
   /** Absolute empty root config included by the Cordis Loader. */
   rootConfig: string
+  /** Profile-owned parent URL used to resolve bare Cordis plugin packages. */
+  bareModuleBaseUrl: string
   /** Complete ordered patch list for this desktop generation. */
   patches: PatchOptions[]
 }
@@ -131,6 +133,7 @@ export function prepareDesktopProfile(
   healProfilesModuleFallback(INSTALL_ANCHOR, home)
   const profile = loadProfile(BIN_NAME, DESKTOP_PROFILE_NAME, INSTALL_ANCHOR, home)
   const rootConfig = join(profileDir, DESKTOP_PROFILE_ROOT)
+  const bareModuleBaseUrl = pathToFileURL(join(profile.dir, 'package.json')).href
   writeFileSync(rootConfig, '[]\n')
 
   const desktopPatches = loadOverlayPatches(BIN_NAME, DESKTOP_PATCH_PATH)
@@ -178,7 +181,7 @@ export function prepareDesktopProfile(
   if ((telemetryDisabled ?? '') !== '' && rows.has('session-telemetry-otel')) {
     patches.push({ id: 'session-telemetry-otel', disabled: true })
   }
-  return { profile, rootConfig, patches: structuredClone(patches) }
+  return { profile, rootConfig, bareModuleBaseUrl, patches: structuredClone(patches) }
 }
 
 /** Expose the package anchor for focused resolution tests. */

@@ -18,6 +18,8 @@ The first phase reuses the existing Web carrier. The launcher composes `PROFILE_
 
 The persistent profile starts with the ordinary Web template bundles. Profile repair places the required `dsh-base` and `dsh-web-app` prefix first, removes the launcher package from the persistent list, and preserves every third-party bundle's relative order. The launcher inserts its desktop patch immediately after the Web application layer and before third-party layers. Profile-local and machine-wide user patches still apply after bundle layers; the loopback-only Web server overlay remains the final launcher-owned security invariant.
 
+Bare plugin imports remain anchored at the persistent profile. A synchronous Node resolve hook applies only when `@deepseek-ai/cordis-plugin-loader` issues a bare import, preserving profile-local third-party dependencies and the healed installation fallback when packaged Electron does not expose Node's internal ESM Loader.
+
 This proposal narrows the implementation route described by [GUI layering and RPC protocol](../../implemented/architecture/2026-07-19-gui-layering-and-rpc-protocol.md) under a strict additive constraint and preserves the [client plugin loading model](../../implemented/architecture/2026-07-23-client-plugin-loading-model.md). It does not supersede either note. A later transport-neutral upstream capability may replace the loopback carrier with IPC without changing profile ownership or the two Cordis plugin trees.
 
 ## Alternatives considered
@@ -38,7 +40,7 @@ This proposal narrows the implementation route described by [GUI layering and RP
 - The browser artifact registers with the existing client module loader under the `dsh-plugin-desktop` graph id and cleans up its renderer marker on fiber disposal.
 - The renderer has no Node integration or raw Electron API, exact-origin navigation stays on the loopback surface, and external allowlisted links open outside the application window.
 - The npm launcher supports headless `--help` and `--version` paths without importing Electron, while its ordinary launch starts the persistent `desktop` profile.
-- A package-level check compiles both faces, typechecks source and tests, runs the profile and lifecycle-focused tests, and verifies the publication file set.
+- A package-level check compiles both faces, typechecks source and tests, runs the profile and lifecycle-focused tests, activates launcher-owned and profile-local plugins through a built headless Loader smoke, and verifies the publication file set.
 - Before release, native-platform jobs verify packaged runtime closure, third-party Host and client plugin activation from an installed profile, installer behavior, signing, and platform trust checks.
 - An installer release provides an explicit plugin-management path that can install profile dependencies without assuming a separately installed Node, DSH CLI, or pnpm.
 
