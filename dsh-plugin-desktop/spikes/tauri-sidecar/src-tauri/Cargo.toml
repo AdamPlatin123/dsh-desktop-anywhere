@@ -1,0 +1,16 @@
+[package]
+name = "dsh-desktop-tauri-spike"
+version = "0.1.0"
+description = "Compatibility-only Tauri shell for DSH Desktop"
+edition = "2021"
+rust-version = "1.77.2"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+dunce = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "=2.11.5", features = [] }

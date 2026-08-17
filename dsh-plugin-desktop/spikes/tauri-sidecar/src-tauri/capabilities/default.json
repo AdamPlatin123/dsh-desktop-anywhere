@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core window operations for the local startup document only.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
