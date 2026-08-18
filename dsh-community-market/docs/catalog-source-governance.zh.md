@@ -89,6 +89,17 @@ Package 级安装判断与来源接入彼此独立。受管安装器可以依据
 
 远程 manifest 中的 provider attribution 属于 provider 自述元数据，不能代替 Anywhere Labs 对关系的披露。
 
+### 当前合作来源披露
+
+截至 2026-08-19，维护者确认当前所有合作来源均为社区技术合作。Anywhere Labs 与这些 provider 之间不存在商业或其他重大利益关系。
+
+| Provider | 接入性质 | 重大关系披露 |
+| --- | --- | --- |
+| [DSH 1024Store](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) | 社区技术合作；Market 为其公开 API 随包提供经过审核的内置 adapter。 | 除社区技术合作外，不存在赞助、付款或分成、所有权或控制、雇佣、共同治理及其他重大利益关系。 |
+| [dshfind](https://dshfind.com) | 社区技术合作；Market 为其公开 API 随包提供经过审核的内置 adapter。 | 除社区技术合作外，不存在赞助、付款或分成、所有权或控制、雇佣、共同治理及其他重大利益关系。 |
+
+如果这些事实发生变化，必须在相关关系影响来源展示、评审或决策之前，更新本登记以及必要的产品或接入披露。
+
 ## 限制与比例原则
 
 本项目不会集中下架用户拥有的标准来源。只有在证据表明存在以下情况时，项目才可以拒绝某个 response、拒绝某项操作，或暂停、移除由项目控制的内置接入：

@@ -89,6 +89,17 @@ A material relationship must not alter compatibility or safety criteria. Where p
 
 Provider attribution in a remote manifest is provider-supplied metadata. It does not substitute for an Anywhere Labs relationship disclosure.
 
+### Current cooperating-source disclosures
+
+As of 2026-08-19, the maintainers confirm that every current cooperating source is a community technical collaboration. There is no commercial or other material-interest relationship between Anywhere Labs and these providers.
+
+| Provider | Integration | Material-relationship disclosure |
+| --- | --- | --- |
+| [DSH 1024Store](https://github.com/imsai-sh/awesome-deepseek-harness-plugins) | Community technical cooperation; Market ships a reviewed built-in adapter for its public API. | No sponsorship, payment or revenue sharing, ownership or control, employment, shared governance, or other material-interest relationship beyond the community technical cooperation. |
+| [dshfind](https://dshfind.com) | Community technical cooperation; Market ships a reviewed built-in adapter for its public API. | No sponsorship, payment or revenue sharing, ownership or control, employment, shared governance, or other material-interest relationship beyond the community technical cooperation. |
+
+If these facts change, this register and any relevant product or integration disclosure must be updated before the relationship affects source presentation, review, or decision-making.
+
 ## Restrictions and proportionate action
 
 The project does not centrally delist user-owned standard sources. It may reject an individual response, refuse an operation, or suspend or remove project-controlled built-in integration when evidence shows one of the following:

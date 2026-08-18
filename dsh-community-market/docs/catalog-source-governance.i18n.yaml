@@ -1,4 +1,4 @@
 # Bilingual-pair consistency record. Both languages carry equal authority.
 # Update both files and record their Git blob hashes after editing either side.
-catalog-source-governance.md: 46557de3a334496c956ac882f8aa398a45ad0dff
-catalog-source-governance.zh.md: 0d0e0283b9277ab610024fca52890099e2f8e3fd
+catalog-source-governance.md: 7ec1ec2e1d10c154358e699cdae7a8d83b5a9d91
+catalog-source-governance.zh.md: 29d59a382a3e811e6cc0782ab70434a5d2e28173
