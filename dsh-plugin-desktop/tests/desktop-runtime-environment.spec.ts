@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -310,14 +311,28 @@ describe('desktop Host pnpm runtime', () => {
     writeFileSync(join(pathDir, 'dsh'), 'stray')
     writeFileSync(join(nodeBinDir, 'dsh'), 'stray')
     const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin' }
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const recovered = [join(pathDir, 'dsh'), join(nodeBinDir, 'dsh')]
+    const onRecovery = vi.fn((message: string) => {
+      const filename = recovered.find(candidate => message.includes(JSON.stringify(candidate)))
+      expect(filename).toBeDefined()
+      expect(existsSync(filename ?? '')).toBe(false)
+    })
 
-    const installation = installDesktopPnpmRuntime(options(stateDir, 'linux', environment))
+    const installation = installDesktopPnpmRuntime({
+      ...options(stateDir, 'linux', environment),
+      onRecovery,
+    })
 
     expect(readdirSync(pathDir)).toEqual(['pnpm'])
     expect(readdirSync(nodeBinDir)).toEqual(['node'])
     expect(environment.PATH).toBe(`${pathDir}:/usr/bin`)
-    expect(stderr).toHaveBeenCalledTimes(2)
+    expect(onRecovery).toHaveBeenCalledTimes(2)
+    expect(onRecovery).toHaveBeenCalledWith(
+      `dsh-plugin-desktop: removed unexpected pnpm runtime entry ${JSON.stringify(join(pathDir, 'dsh'))}`,
+    )
+    expect(onRecovery).toHaveBeenCalledWith(
+      `dsh-plugin-desktop: removed unexpected pnpm runtime entry ${JSON.stringify(join(nodeBinDir, 'dsh'))}`,
+    )
     installation.dispose()
   })
 
@@ -325,29 +340,122 @@ describe('desktop Host pnpm runtime', () => {
     const root = temporaryDirectory()
     const stateDir = join(root, 'runtime')
     const pathDir = join(stateDir, 'bin')
+    const nodeBinDir = join(stateDir, 'private', 'node-bin')
     mkdirSync(pathDir, { recursive: true })
-    const target = join(root, 'outside')
-    writeFileSync(target, 'outside')
-    symlinkSync(target, join(pathDir, 'dsh'))
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    mkdirSync(nodeBinDir, { recursive: true })
+    const publicTarget = join(root, 'public-outside')
+    const privateTarget = join(root, 'private-outside')
+    const publicLink = join(pathDir, 'dsh')
+    const privateLink = join(nodeBinDir, 'dsh')
+    writeFileSync(publicTarget, 'public outside')
+    writeFileSync(privateTarget, 'private outside')
+    symlinkSync(publicTarget, publicLink)
+    symlinkSync(privateTarget, privateLink)
+    const onRecovery = vi.fn()
 
-    const installation = installDesktopPnpmRuntime(options(stateDir, 'linux', { PATH: '/usr/bin' }))
+    const installation = installDesktopPnpmRuntime({
+      ...options(stateDir, 'linux', { PATH: '/usr/bin' }),
+      onRecovery,
+    })
 
     expect(readdirSync(pathDir)).toEqual(['pnpm'])
-    expect(readFileSync(target, 'utf8')).toBe('outside')
-    expect(stderr).toHaveBeenCalledOnce()
+    expect(readdirSync(nodeBinDir)).toEqual(['node'])
+    expect(readFileSync(publicTarget, 'utf8')).toBe('public outside')
+    expect(readFileSync(privateTarget, 'utf8')).toBe('private outside')
+    expect(existsSync(publicLink)).toBe(false)
+    expect(existsSync(privateLink)).toBe(false)
+    expect(onRecovery).toHaveBeenCalledTimes(2)
     installation.dispose()
   })
 
-  it('refuses an unexpected directory in the public command directory', () => {
+  it('recovers Windows command directories without widening their allowlists', () => {
     const root = temporaryDirectory()
     const stateDir = join(root, 'runtime')
     const pathDir = join(stateDir, 'bin')
-    mkdirSync(join(pathDir, 'dsh'), { recursive: true })
-    const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin' }
+    const nodeBinDir = join(stateDir, 'private', 'node-bin')
+    mkdirSync(pathDir, { recursive: true })
+    mkdirSync(nodeBinDir, { recursive: true })
+    writeFileSync(join(pathDir, 'dsh'), 'stray')
+    writeFileSync(join(nodeBinDir, 'node'), 'legacy')
+    const environment: NodeJS.ProcessEnv = { Path: 'C:\\Windows' }
+    const onRecovery = vi.fn()
 
-    expect(() => installDesktopPnpmRuntime(options(stateDir, 'linux', environment)))
-      .toThrow('contains an unexpected directory: dsh')
+    const installation = installDesktopPnpmRuntime({
+      ...options(stateDir, 'win32', environment),
+      onRecovery,
+    })
+
+    expect(readdirSync(pathDir)).toEqual(['pnpm.cmd'])
+    expect(readdirSync(nodeBinDir)).toEqual(['node.cmd'])
+    expect(environment.Path).toBe(`${pathDir};C:\\Windows`)
+    expect(onRecovery).toHaveBeenCalledTimes(2)
+    installation.dispose()
+  })
+
+  it('keeps recovery logging failures from blocking startup', () => {
+    const root = temporaryDirectory()
+    const stateDir = join(root, 'runtime')
+    const pathDir = join(stateDir, 'bin')
+    mkdirSync(pathDir, { recursive: true })
+    writeFileSync(join(pathDir, 'dsh'), 'stray')
+    const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin' }
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const installation = installDesktopPnpmRuntime({
+      ...options(stateDir, 'linux', environment),
+      onRecovery: () => { throw new Error('logger unavailable') },
+    })
+
+    expect(readdirSync(pathDir)).toEqual(['pnpm'])
+    expect(environment.PATH).toBe(`${pathDir}:/usr/bin`)
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('removed unexpected pnpm runtime entry'))
+    installation.dispose()
+  })
+
+  it('preflights both command directories before removing unexpected entries', () => {
+    const root = temporaryDirectory()
+    const stateDir = join(root, 'runtime')
+    const pathDir = join(stateDir, 'bin')
+    const nodeBinDir = join(stateDir, 'private', 'node-bin')
+    const stray = join(pathDir, 'dsh')
+    const blocked = join(nodeBinDir, 'blocked')
+    mkdirSync(pathDir, { recursive: true })
+    mkdirSync(blocked, { recursive: true })
+    writeFileSync(stray, 'stray')
+    const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin' }
+    const onRecovery = vi.fn()
+
+    expect(() => installDesktopPnpmRuntime({
+      ...options(stateDir, 'linux', environment),
+      onRecovery,
+    })).toThrow(`contains an unexpected directory: ${JSON.stringify(blocked)}`)
+    expect(readFileSync(stray, 'utf8')).toBe('stray')
+    expect(lstatSync(blocked).isDirectory()).toBe(true)
+    expect(onRecovery).not.toHaveBeenCalled()
+    expect(environment).toEqual({ PATH: '/usr/bin' })
+  })
+
+  it.runIf(process.platform !== 'win32')('refuses special entries without partially removing files', () => {
+    const root = temporaryDirectory()
+    const stateDir = join(root, 'runtime')
+    const pathDir = join(stateDir, 'bin')
+    const stray = join(pathDir, 'dsh')
+    const fifo = join(pathDir, 'blocked-fifo')
+    mkdirSync(pathDir, { recursive: true })
+    writeFileSync(stray, 'stray')
+    const created = spawnSync('mkfifo', [fifo], { encoding: 'utf8' })
+    expect(created.error).toBeUndefined()
+    expect(created.status, created.stderr).toBe(0)
+    const environment: NodeJS.ProcessEnv = { PATH: '/usr/bin' }
+    const onRecovery = vi.fn()
+
+    expect(() => installDesktopPnpmRuntime({
+      ...options(stateDir, 'linux', environment),
+      onRecovery,
+    })).toThrow(`contains an unexpected non-file entry: ${JSON.stringify(fifo)}`)
+    expect(readFileSync(stray, 'utf8')).toBe('stray')
+    expect(lstatSync(fifo).isFIFO()).toBe(true)
+    expect(onRecovery).not.toHaveBeenCalled()
     expect(environment).toEqual({ PATH: '/usr/bin' })
   })
 
@@ -378,6 +486,29 @@ describe('desktop Host pnpm runtime', () => {
 })
 
 describe('desktop Host dsh runtime', () => {
+  it('keeps unexpected Host commands fail-loud', () => {
+    const root = temporaryDirectory()
+    const stateDir = join(root, 'runtime')
+    const pathDir = join(stateDir, 'bin')
+    const unexpected = join(pathDir, 'foreign.cmd')
+    mkdirSync(pathDir, { recursive: true })
+    writeFileSync(unexpected, 'unexpected')
+    const environment: NodeJS.ProcessEnv = { Path: 'C:\\Windows' }
+
+    expect(() => installDesktopDshRuntime({
+      platform: 'win32',
+      appExecutable: 'C:\\Program Files\\DSH Desktop\\DSH Desktop.exe',
+      dshBootstrapPath: 'C:\\Program Files\\DSH Desktop\\resources\\app.asar\\lib\\desktop-cli.js',
+      profileName: 'web',
+      homeDir: 'C:\\Users\\user\\.dsh',
+      stateDir,
+      environment,
+    })).toThrow('directory contains unexpected entries: foreign.cmd')
+    expect(readFileSync(unexpected, 'utf8')).toBe('unexpected')
+    expect(readdirSync(pathDir)).toEqual(['foreign.cmd'])
+    expect(environment).toEqual({ Path: 'C:\\Windows' })
+  })
+
   it.runIf(process.platform === 'win32')('makes the active profile available to Host plugin child processes', () => {
     const root = temporaryDirectory()
     const stateDir = join(root, 'runtime')

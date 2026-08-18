@@ -282,6 +282,7 @@ async function start(): Promise<void> {
       electronVersion,
       stateDir: join(app.getPath('userData'), 'runtime-commands'),
       environment: process.env,
+      onRecovery: message => electronLogger.error(message),
     })
     const releasePnpmRuntime = (): void => { pnpmRuntime.dispose() }
     disposePnpmRuntime = releasePnpmRuntime

@@ -38,6 +38,8 @@ export interface DesktopPnpmRuntimeOptions {
   stateDir: string
   /** Parent environment whose PATH is updated; defaults to `process.env`. */
   environment?: NodeJS.ProcessEnv
+  /** Best-effort observer for each successfully removed unexpected command entry. */
+  onRecovery?: (message: string) => void
 }
 
 /** Files and reversible PATH update created for the Host runtime. */
@@ -135,24 +137,40 @@ function assertOwnedDirectoryEntries(directory: string, allowed: readonly string
   }
 }
 
-/** Remove one stray command entry without recursively deleting unknown data. */
-function removeUnexpectedEntry(directory: string, entry: string): void {
-  const filename = join(directory, entry)
-  if (lstatSync(filename).isDirectory()) {
-    throw new Error(
-      `dsh-plugin-desktop: command runtime contains an unexpected directory: ${entry}`,
-    )
-  }
-  process.stderr.write(
-    `dsh-plugin-desktop: removing unexpected command runtime entry ${JSON.stringify(entry)}\n`,
-  )
-  unlinkSync(filename)
+/** Preflight recoverable entries without deleting unknown directories or special files. */
+function recoverableUnexpectedEntries(directory: string, allowed: readonly string[]): string[] {
+  return readdirSync(directory)
+    .filter(entry => !allowed.includes(entry))
+    .map((entry) => {
+      const filename = join(directory, entry)
+      const stat = lstatSync(filename)
+      if (!stat.isFile() && !stat.isSymbolicLink()) {
+        const kind = stat.isDirectory() ? 'directory' : 'non-file entry'
+        throw new Error(
+          `dsh-plugin-desktop: command runtime contains an unexpected ${kind}: ${JSON.stringify(filename)}`,
+        )
+      }
+      return filename
+    })
 }
 
-/** Recover an app-owned command directory to this generation's exact contents. */
-function reconcileOwnedDirectoryEntries(directory: string, allowed: readonly string[]): void {
-  for (const entry of readdirSync(directory)) {
-    if (!allowed.includes(entry)) removeUnexpectedEntry(directory, entry)
+/** Remove preflighted command entries before exposing their directory through PATH. */
+function removeUnexpectedEntries(
+  filenames: readonly string[],
+  onRecovery: DesktopPnpmRuntimeOptions['onRecovery'],
+): void {
+  for (const filename of filenames) {
+    unlinkSync(filename)
+    const message = `dsh-plugin-desktop: removed unexpected pnpm runtime entry ${JSON.stringify(filename)}`
+    if (onRecovery === undefined) {
+      process.stderr.write(`${message}\n`)
+      continue
+    }
+    try {
+      onRecovery(message)
+    } catch {
+      process.stderr.write(`${message}\n`)
+    }
   }
 }
 
@@ -409,8 +427,11 @@ export function installDesktopPnpmRuntime(options: DesktopPnpmRuntimeOptions): D
   removeStaleTemporaryFiles(pathDir, pnpmShimName)
   removeStaleTemporaryFiles(nodeBinDir, nodeShimName)
   removeStaleTemporaryFiles(privateDir, 'clear-env.mjs')
-  reconcileOwnedDirectoryEntries(pathDir, [pnpmShimName])
-  reconcileOwnedDirectoryEntries(nodeBinDir, [nodeShimName])
+  const unexpectedEntries = [
+    ...recoverableUnexpectedEntries(pathDir, [pnpmShimName]),
+    ...recoverableUnexpectedEntries(nodeBinDir, [nodeShimName]),
+  ]
+  removeUnexpectedEntries(unexpectedEntries, options.onRecovery)
   const pnpmShimPath = join(pathDir, pnpmShimName)
   const nodeShimPath = join(nodeBinDir, nodeShimName)
   const clearEnvironmentPath = join(privateDir, 'clear-env.mjs')
