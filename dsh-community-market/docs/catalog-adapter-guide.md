@@ -2,7 +2,7 @@
 
 [中文](catalog-adapter-guide.zh.md)
 
-Status: Implemented public v1 integration guide. The authoritative Schemas and compatibility rules are versioned by the [catalog provider contract](catalog-provider-contract.md).
+Status: Implemented public v1 integration guide. The authoritative Schemas and compatibility rules are versioned by the [catalog provider contract](catalog-provider-contract.md); access, cooperation, disclosure, and reconsideration follow the [catalog source governance and cooperation policy](catalog-source-governance.md).
 
 DSH Community Market is open to every catalog provider and user-owned source. Anyone can use path A immediately by publishing Schema-conforming public HTTPS JSON and sharing the manifest URL; no Market code change or partnership approval is required. Providers that need path B are welcome to propose a reviewed adapter collaboration for their existing public API.
 
@@ -26,9 +26,24 @@ Use this path when an existing API cannot return the standard page shape. Give t
 - the public endpoint documentation and response schema;
 - representative success, empty, pagination, and error responses with secrets removed;
 - stable field meanings and pagination rules;
-- attribution, rate limits, and the provider's icon ownership semantics.
+- attribution, upstream data provenance, and the rights or license for metadata and media;
+- published rate limits, privacy-relevant request or logging behavior, and incident/change-notification contacts; and
+- any material sponsorship, payment, ownership, employment, shared-governance, or other relationship relevant to the integration review.
 
 The adapter is local TypeScript reviewed, tested, and released with Market. It uses the constrained Host HTTP client and returns a validated `CatalogSnapshot`. Open cooperation does not bypass review: a manifest or remote response can never supply JavaScript, mapping expressions, install commands, credentials, or adapter code.
+
+### Cooperation review and lifecycle
+
+For a new or materially changed built-in adapter:
+
+1. Open a repository issue or pull request that identifies the provider, public API, proposed mapping, maintenance contact, and the materials above. Send unpatched vulnerability details through [Security](../SECURITY.md), not the public intake.
+2. Maintainers review the request against the same technical, security, privacy, integrity, rights, and maintenance criteria used for comparable adapters. The record identifies the integration relationship and any material conflict of interest.
+3. The Market-owned adapter, tests, provider definition, attribution, relationship disclosure, and documentation are reviewed together. Remote configuration cannot replace any of them.
+4. The provider and Market maintainers establish a practical path for API-change and security-incident notification. Published limits and provider terms are reviewed inputs to the integration; they do not authorize a remote response to configure or control Market behavior.
+5. The adapter lands through the ordinary reviewed release process. It is visible only as an optional source choice and remains unselected until the user adds and selects it.
+6. Material API, ownership, relationship, privacy, or rights changes require renewed review. A restriction, emergency suspension, removal, or reconsideration follows the governance policy rather than an unpublished commercial or editorial rule.
+
+Engineering capacity may affect the schedule or continued maintenance of provider-specific code. It never changes access to path A for a conforming standard source.
 
 ## Copyable adapter skeleton
 

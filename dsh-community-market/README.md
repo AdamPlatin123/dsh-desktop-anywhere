@@ -35,6 +35,8 @@ dshfind currently supplies provider-maintained installation claims and command t
 
 All catalog data is remote and untrusted. A listing means only that a provider supplied metadata; it does **not** mean that Anywhere Labs reviewed, recommends, or guarantees the plugin.
 
+The standard-source path is governed by the public contract rather than invitation or commercial relationship. The [catalog source governance and cooperation policy](docs/catalog-source-governance.md) defines neutral and non-discriminatory treatment, material-relationship disclosure, proportionate restrictions, emergency action, and reconsideration. It also keeps standard-source compatibility, built-in adapter review, cooperation, and recommendation as separate decisions.
+
 ## Safety promise
 
 - Background browsing never installs a package or executes repository code.
@@ -57,6 +59,7 @@ These checks establish package identity and a narrow compatibility boundary; the
 - [Install and uninstall](docs/install-and-uninstall.md): the four views, user workflow, Host verification, receipts, supported targets, and developer integration boundary.
 - [Catalog provider contract](docs/catalog-provider-contract.md): source manifests, query parameters, wire and normalized JSON, selected-source behavior, and the implementation handoff.
 - [Catalog adapter guide](docs/catalog-adapter-guide.md): the direct standard-source path, the reviewed adapter path for an existing API, and a mapping template.
+- [Catalog source governance](docs/catalog-source-governance.md): open access, neutrality, relationship disclosure, adapter review, restrictions, and reconsideration.
 - [Security](SECURITY.md): trust model, reporting, and non-negotiable installation rules.
 - [Desktop plugin services](../dsh-plugin-desktop/docs/plugin-services.md): the `desktopProfiles` and `desktopPnpm` contracts used by Market package operations.
 - [DSH plugin development](../docs/plugin-development.en.md): the shared plugin model used by ordinary DSH and Desktop.

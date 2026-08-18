@@ -48,6 +48,8 @@
 
 生成**可安装**列表时不会逐包访问 registry。它会排除产品 blocklist 中的 package，但不会读取当前 profile、Market receipt 或启用/禁用状态来决定目录成员资格。Preview 针对用户选中的候选完成官方 registry 与当前 profile 复核。用户确认后、真正安装前，执行阶段会立即重复可变检查；如果 integrity、tarball、bundle 路径、目录候选或当前 profile 发生变化，就会拒绝执行。同一时间只允许一个 Market package 修改操作。
 
+静态产品保护清单目前只有 `dsh-plugin-desktop` 和 `dsh-community-market`。Market 会把这两个产品组件排除在**可安装**之外，避免通过插件安装路径替换自己的 Host 或市场实现。这是产品完整性规则，不是对来源或其目录内容的判断。除此之外，Desktop 可以报告当前 profile 中被禁用的 package 名；这些名称只在 preview 和执行阶段检查，不会改变目录成员资格。
+
 ## 受保护安装恢复
 
 恢复边界刻意只做到配置层，并且只适用于 `plugin add`。Market 受管安装，或通过 Desktop 内置 DSH 终端运行 `dsh plugin add` 之前，Desktop 会为以下固定白名单保存私有前镜像：

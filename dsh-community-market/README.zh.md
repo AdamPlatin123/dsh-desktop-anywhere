@@ -35,6 +35,8 @@ dshfind 当前会返回由提供方维护的安装结论和命令文本，但没
 
 所有目录数据都是远程、且不可信的输入。项目被收录只表示提供方返回了相关元数据；这**不表示** Anywhere Labs 已经审核、推荐或保证该插件。
 
+标准来源路径由公开契约决定，而不是邀请或商业关系。[目录数据源治理与合作政策](docs/catalog-source-governance.zh.md)规定了中立与非歧视、重大关系披露、符合比例的限制、紧急处置和复核流程，并明确区分标准来源兼容、内置 adapter 审核、合作关系和推荐判断。
+
 ## 安全承诺
 
 - 后台浏览不会安装任何包，也不会执行仓库代码。
@@ -57,6 +59,7 @@ dshfind 当前会返回由提供方维护的安装结论和命令文本，但没
 - [安装与卸载](docs/install-and-uninstall.zh.md)：四个视图、用户流程、Host 复核、receipt、支持目标和开发集成边界。
 - [目录提供方合同](docs/catalog-provider-contract.zh.md)：来源 manifest、查询参数、wire/标准化 JSON、单一已选来源行为和实现交接要求。
 - [目录适配器指南](docs/catalog-adapter-guide.zh.md)：标准来源直接接入、已有 API 的受审 adapter 接入路径和映射模板。
+- [目录数据源治理](docs/catalog-source-governance.zh.md)：开放接入、中立、关系披露、adapter 审核、限制与复核。
 - [安全说明](SECURITY.zh.md)：信任模型、漏洞反馈和不可妥协的安装规则。
 - [Desktop 插件服务](../dsh-plugin-desktop/docs/plugin-services.zh.md)：Market package 操作正在使用的 `desktopProfiles` 与 `desktopPnpm` 合同。
 - [DSH 插件开发](../docs/plugin-development.md)：普通 DSH 与 Desktop 共用的插件模型。

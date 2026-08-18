@@ -49,3 +49,5 @@ Do not include secrets or personal data. Please do not open a public issue for a
 ## Dependency and catalog reports
 
 A vulnerability in a listed third-party plugin should normally be reported to that plugin's maintainer. A bad or misleading catalog entry should also be reported to the catalog provider, whether it is a cooperating provider or a source added by the user. Report it here as well only when the market shell itself mishandles the entry or presents an unsafe action.
+
+Questions about source access, cooperation status, non-security restrictions, relationship disclosure, or reconsideration follow the [catalog source governance and cooperation policy](docs/catalog-source-governance.md). An unpatched vulnerability must still use the private channel above.

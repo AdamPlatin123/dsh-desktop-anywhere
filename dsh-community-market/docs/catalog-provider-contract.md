@@ -30,7 +30,7 @@ This contract defines:
 - the minimum network and data-safety boundary;
 - the implemented v1 capability checklist and verified acceptance matrix.
 
-It does not define catalog governance, plugin review, account systems, payments, arbitrary authenticated sources, or package installation commands. Installation remains a separate user-confirmed operation owned by the market Host and the active-profile services.
+It does not itself define catalog governance; open access, neutrality, relationship disclosure, restrictions, and reconsideration are governed by the [catalog source governance and cooperation policy](catalog-source-governance.md). It also does not define plugin review, account systems, payments, arbitrary authenticated sources, or package installation commands. Installation remains a separate user-confirmed operation owned by the market Host and the active-profile services.
 
 ## Terms
 

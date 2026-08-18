@@ -58,6 +58,8 @@ The Host supports two source paths:
 
 DSH Community Market openly cooperates with a wide range of plugin data sources. Anyone may publish a plugin catalog that implements the public standard contract, and any user may add and use such a source. A provider that uses a different API may propose a reviewed built-in adapter, while conforming standard sources can connect directly through the public contract.
 
+Here, federated means that independently operated sources share one interoperability boundary and remain under user choice. The implemented v1 product does not concurrently aggregate, merge, deduplicate, or rank several sources. Access, cooperation, disclosure, restrictions, and reconsideration follow the [catalog source governance and cooperation policy](catalog-source-governance.md).
+
 A remote manifest can describe data, but cannot supply adapter code, credentials, commands, enablement, or priority. Every adapter converts its private response into the same normalized page before the renderer receives it. Source-specific fields must never become UI assumptions.
 
 The standard adapter serializes only fields declared in the source manifest's `query.supported` list. In particular, it omits `category` for a source that does not advertise category support; unsupported fields are not emulated or broadcast to that source.

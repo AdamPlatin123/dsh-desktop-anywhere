@@ -48,6 +48,9 @@ const publicFiles = [
   'docs/catalog-provider-contract.i18n.yaml',
   'docs/catalog-provider-contract.md',
   'docs/catalog-provider-contract.zh.md',
+  'docs/catalog-source-governance.i18n.yaml',
+  'docs/catalog-source-governance.md',
+  'docs/catalog-source-governance.zh.md',
   'docs/install-and-uninstall.i18n.yaml',
   'docs/install-and-uninstall.md',
   'docs/install-and-uninstall.zh.md',
@@ -88,6 +91,7 @@ const pairs = [
   ['SECURITY.i18n.yaml', ['SECURITY.md', 'SECURITY.zh.md']],
   ['docs/catalog-adapter-guide.i18n.yaml', ['docs/catalog-adapter-guide.md', 'docs/catalog-adapter-guide.zh.md']],
   ['docs/catalog-provider-contract.i18n.yaml', ['docs/catalog-provider-contract.md', 'docs/catalog-provider-contract.zh.md']],
+  ['docs/catalog-source-governance.i18n.yaml', ['docs/catalog-source-governance.md', 'docs/catalog-source-governance.zh.md']],
   ['docs/install-and-uninstall.i18n.yaml', ['docs/install-and-uninstall.md', 'docs/install-and-uninstall.zh.md']],
   ['docs/market-shell.i18n.yaml', ['docs/market-shell.md', 'docs/market-shell.zh.md']],
 ]

@@ -2,7 +2,7 @@
 
 [English](catalog-adapter-guide.md)
 
-状态：已实现的公开 v1 接入指南。权威 Schema 与兼容规则仍以[目录提供方契约](catalog-provider-contract.zh.md)为准。
+状态：已实现的公开 v1 接入指南。权威 Schema 与兼容规则仍以[目录提供方契约](catalog-provider-contract.zh.md)为准；接入、合作、披露与复核遵循[目录数据源治理与合作政策](catalog-source-governance.zh.md)。
 
 DSH Community Market 对所有目录 provider 和用户自有来源开放。任何人都可以直接选择路径 A：发布符合 Schema 的公开 HTTPS JSON，并分享 manifest URL；无需修改 Market 代码，也无需先获得合作批准。需要路径 B 的 provider 也可以使用现有公开 API 提出经过审核的 adapter 合作接入。
 
@@ -26,9 +26,24 @@ Provider 能在同一个 origin 发布两个匿名 HTTPS JSON 资源时，选择
 - 公开 endpoint 文档与 response schema；
 - 已移除 secret 的成功、空结果、分页和错误 response 样例；
 - 稳定字段语义和分页规则；
-- 来源声明、rate limit 和 provider 的图标所有权语义。
+- attribution、上游数据 provenance，以及元数据与媒体的权利或 license；
+- 已发布的 rate limit、与隐私有关的请求或日志行为，以及事故与变更通知联系人；
+- 与接入评审有关的重大赞助、付款、所有权、雇佣、共同治理或其他关系。
 
 Adapter 是本地 TypeScript，经过审核与测试后随 Market 发布。它只使用受限 Host HTTP client，并返回经过校验的 `CatalogSnapshot`。开放合作不会绕过审核：manifest 或远程 response 绝不能提供 JavaScript、mapping 表达式、install command、credential 或 adapter 代码。
+
+### 合作评审与生命周期
+
+新增或重大修改内置 adapter 时：
+
+1. 在仓库提交 issue 或 PR，说明 provider、公开 API、拟议 mapping、维护联系人和上述材料。未修复漏洞按[安全策略](../SECURITY.zh.md)私下报告，不进入公开接入流程。
+2. 维护者按照同类 adapter 共用的技术、安全、隐私、完整性、权利与维护标准进行评审。记录中要说明接入关系和任何重大利益冲突。
+3. Market 拥有的 adapter、测试、provider definition、attribution、关系披露和文档必须一起评审；远程配置不能代替其中任何一项。
+4. Provider 与 Market 维护者应建立现实可行的 API 变更和安全事故通知路径。已发布限制与 provider 条款是接入评审的输入；它们不授权远程 response 配置或控制 Market 行为。
+5. Adapter 通过普通受审发布流程合入。它只能作为可选来源出现，并且在用户添加和选择前始终保持未选中。
+6. API、所有权、合作关系、隐私或权利发生重大变化时需要重新评审。限制、紧急暂停、移除或复核遵循治理政策，而不是未公开的商业或编辑规则。
+
+工程资源会影响 provider-specific 代码的开发进度或能否持续维护，但不会改变符合契约的标准来源通过路径 A 接入的能力。
 
 ## 可复制 adapter skeleton
 

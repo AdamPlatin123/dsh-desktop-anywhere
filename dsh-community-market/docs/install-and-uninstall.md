@@ -48,6 +48,8 @@ The built-in managed installation boundary supports only an npm package when all
 
 Building **Installable** does not perform per-package registry I/O. It excludes product-blocked packages, but does not read the active profile, Market receipts, or enabled/disabled state to decide catalog membership. Preview performs official-registry and active-profile verification for the selected candidate. Immediately before confirmed installation, execution repeats mutable checks; if integrity, tarball, bundle path, catalog candidate, or active profile changed, it refuses the operation. Only one Market package mutation runs at a time.
 
+The static product-protection list currently contains exactly `dsh-plugin-desktop` and `dsh-community-market`. Market excludes these two product components from **Installable** so it cannot replace its own Host or market implementation through the plugin-install path. This is a product-integrity rule, not a judgment about a source or its catalog. Separately, Desktop may report package names disabled for the active profile; those names are checked during preview and execution and do not change catalog membership.
+
 ## Protected install recovery
 
 The recovery boundary is deliberately configuration-level and applies only to `plugin add`. Before a Market-managed install or a `dsh plugin add` launched through Desktop's built-in DSH Terminal, Desktop stores private preimages for this fixed allowlist:
