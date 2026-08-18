@@ -26,8 +26,9 @@
 | [Fabric 社区意见处置记录](../dsh-community-fabric/docs/research/community-issue-23-review.zh.md) | Issue #23 中哪些建议已采纳、拆成独立 RFC、延期或不进入可移植核心 |
 | [Fabric 框架与插件需求调研](../dsh-community-fabric/docs/research/mature-plugin-frameworks.zh.md) | Koishi、Chrome、VS Code 的成熟模式，以及真实 DSH 插件的功能需求 |
 | [VS Code 扩展模型调研](../dsh-community-fabric/docs/research/vscode-extension-model.zh.md) | VS Code 已实现的声明、Provider、UI、运行位置和生命周期模式，以及它们对 Fabric RFC 的具体约束 |
-| [Community Market 设计](../dsh-community-market/README.zh.md) | 规划中的插件市场壳、可扩展目录来源、用户选择、安装确认和安全边界 |
-| [Market 目录提供方合同](../dsh-community-market/docs/catalog-provider-contract.zh.md) | 面向后续实现团队的 Schema、query 参数、多来源和适配器规范 |
+| [Community Market](../dsh-community-market/README.zh.md) | 已内置的市场 Host/Client、可扩展目录来源、用户选择、安装确认和安全边界 |
+| [Market 目录提供方契约](../dsh-community-market/docs/catalog-provider-contract.zh.md) | 已实现的 Schema、query 参数、单一已选来源和 adapter 兼容规范 |
+| [目录数据源治理](../dsh-community-market/docs/catalog-source-governance.zh.md) | 开放接入、中立与非歧视、重大关系披露、限制和复核流程 |
 | [架构说明](architecture.md) | Electron、Host、loopback Web、profile 和打包之间的关系 |
 | [Desktop service 参考](../dsh-plugin-desktop/docs/plugin-services.md) | `desktopProfiles`、`desktopPnpm` 的稳定 contract 和 TypeScript 示例 |
 | [包级参考](../dsh-plugin-desktop/README.md) | 完整的构建、运行、发布和已知限制 |
@@ -46,4 +47,4 @@
 
 ## 状态约定
 
-文档会明确区分已实现能力、平台限制和 roadmap。Desktop 的兼容模式保留上游默认 Web 客户端；高级模式才安装 Desktop 自有的布局和原生材质。插件市场已建立 [`dsh-community-market`](../dsh-community-market/README.zh.md) 文档初始化工程，但尚无可用页面或安装器；手机远程和 Channels 也仍是独立 roadmap，不代表当前安装包已经提供这些产品入口。
+文档会明确区分已实现能力、平台限制和 roadmap。Desktop 的兼容模式保留上游默认 Web 客户端；高级模式才安装 Desktop 自有的布局和原生材质。[`dsh-community-market`](../dsh-community-market/README.zh.md) 已实现并内置市场页面、目录来源和受管 package 操作；手机远程和 Channels 仍是独立 roadmap，不代表当前安装包已经提供这些产品入口。

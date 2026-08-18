@@ -31,6 +31,7 @@ The current Desktop product provides:
 - Compatibility and advanced presentation modes. Compatibility preserves the upstream client; advanced adds Desktop-owned layout, native materials, and drag regions.
 - Multiple profile selection. Desktop exposes the active profile identity for the current generation, and switching takes effect through an orderly restart.
 - A bundled terminal and pinned pnpm environment. They apply only to processes created by Desktop and do not modify the user's global PATH.
+- A built-in Community Market with user-selected catalog sources, plugin discovery, and managed package operations behind strict confirmation and verification boundaries.
 - A controlled set of extension interfaces for plugin developers (see [plugin development](plugin-development.en.md)).
 - Version discovery and confirmation-gated installer downloads, handing off to a macOS DMG or Windows NSIS installer.
 
@@ -40,7 +41,7 @@ The current Desktop product provides:
 - Override the upstream layout, sidebar, or conversation composition in compatibility mode.
 - Copy records into a separate “Desktop database”; official profiles share the DSH home for sessions and settings by default.
 - Give third-party plugins an undefined private Electron API.
-- Present roadmap items such as a plugin marketplace, mobile remote control, or Channels as shipped features.
+- Present roadmap items such as mobile remote control or Channels as shipped features.
 
 ## Who should read this
 

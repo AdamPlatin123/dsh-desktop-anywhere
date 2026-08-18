@@ -28,7 +28,7 @@ This manifesto is not a unilateral rulebook. It is a **living document**: it fol
 
 ## The plugin marketplace: making conventions the beneficial choice
 
-Once the plugin marketplace ships, plugins that follow this manifesto will be easier to discover, install, and trust. We want convention-driven development to be the beneficial choice for every author, not an extra burden.
+The plugin marketplace is now built in. Listing and discovery come from the user's selected catalog source; following this manifesto does not automatically grant listing, ranking, or recommendation. The direct value of the conventions is easier composition, maintenance, and compatibility reasoning. Catalog listing, a built-in adapter, and **Installable** status are also not a security review, recommendation, or endorsement.
 
 ## From a manifesto to a testable contract
 
@@ -36,7 +36,7 @@ Once the plugin marketplace ships, plugins that follow this manifesto will be ea
 
 Fabric capabilities begin as compatibility, consent, and audit declarations. They do not present in-process JavaScript as a security sandbox. Only a Host with evidence of real isolation may claim technical permission enforcement.
 
-The market is still in its [product and safety design phase](../dsh-community-market/README.md), with no usable page or installer yet. Catalog inclusion means that a project matched catalog rules; it is not a security review or endorsement.
+The current [DSH Community Market](../dsh-community-market/README.md) implements the public source contract, user-added sources, cooperating-source adapters, and managed package operations. Source access, neutrality, material-relationship disclosure, restrictions, and reconsideration follow the [catalog source governance and cooperation policy](../dsh-community-market/docs/catalog-source-governance.md).
 
 ## How to participate
 

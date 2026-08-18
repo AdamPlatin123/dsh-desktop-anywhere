@@ -31,6 +31,7 @@ DSH Desktop 的目标不是重新实现 Harness，而是把同一个运行时放
 - 兼容模式和高级模式。兼容模式保留上游默认客户端；高级模式提供 Desktop 自有的布局、窗口材质和原生拖动区域。
 - 多 profile 选择。当前 generation 的 profile 身份由 Desktop 明确提供，切换通过有序重启生效。
 - 内置终端和固定版本 pnpm 环境。它们只作用于 Desktop 自己创建的进程，不修改用户的全局 PATH。
+- 内置 Community Market，支持用户选择目录来源、发现插件，以及在严格确认和复核边界内进行受管 package 操作。
 - 面向插件开发者的一组受控扩展接口（详见[插件开发](plugin-development.md)）。
 - 版本检查、用户确认后的安装包下载，以及 macOS DMG/Windows NSIS 的平台交接。
 
@@ -40,7 +41,7 @@ DSH Desktop 的目标不是重新实现 Harness，而是把同一个运行时放
 - 不在兼容模式中覆盖上游 layout、sidebar 或 conversation 组合。
 - 不把记录复制到另一个“Desktop 数据库”；官方 profile 默认共享 DSH home 中的会话和设置。
 - 不给第三方插件一个未定义的 Electron 私有 API。
-- 不把 roadmap（插件市场、手机远程、Channels）写成当前版本已经交付的功能。
+- 不把手机远程、Channels 等 roadmap 写成当前版本已经交付的功能。
 
 ## 适合谁
 

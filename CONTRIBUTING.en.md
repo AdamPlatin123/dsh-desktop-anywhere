@@ -17,9 +17,10 @@ DSH is built around plugins. If you write plugins, start with:
 - [Plugin development](docs/plugin-development.en.md): how to write ordinary DSH plugins and Desktop plugins.
 - [DSH plugin ecosystem manifesto](docs/plugin-ecosystem.en.md): our vision of an open, composable, sustainable ecosystem, and the three principles — composition first, declare clearly, compatibility first.
 - [DSH Community Fabric Draft](dsh-community-fabric/README.md): join the public discussion of manifests, capabilities, Host Descriptors, and event contracts.
-- [Community Market design](dsh-community-market/docs/market-shell.md): how the future market will discover plugins and why listing is not a security review.
+- [Community Market](dsh-community-market/README.md): how the current built-in market discovers and manages plugins, and why listing is not a security review.
+- [Catalog source governance](dsh-community-market/docs/catalog-source-governance.md): open access, neutrality, relationship disclosure, restrictions, and reconsideration.
 
-Plugins that follow the manifesto coexist better with other plugins and will be easier to discover and trust in the marketplace when it ships.
+Following the manifesto helps plugins compose and remain compatible. Listing and discovery in the current Market come from the user's selected catalog source; manifesto conformance does not grant listing, ranking, or recommendation.
 
 ## Developers: contribute code
 
@@ -35,7 +36,7 @@ corepack yarn dev     # launch the application when a graphical session is avail
 ### Repository boundaries (please read before starting)
 
 - `deepseek-harness/` is the pinned upstream submodule. **Desktop development never edits files inside it**; upstream updates land through separate pin commits.
-- Desktop code lives in `dsh-plugin-desktop/`; `dsh-community-fabric/` owns the community-standard Draft and `dsh-community-market/` owns the market-shell design. Both community packages are currently documentation-only and not loadable; all three owned packages share the outer Yarn workspace.
+- Desktop code lives in `dsh-plugin-desktop/`; `dsh-community-fabric/` owns the documentation-only community-standard Draft and remains non-loadable; `dsh-community-market/` is the implemented, built-in Market Host/Client package. All three owned packages share the outer Yarn workspace.
 - Builds, typechecks, unit tests, and smoke checks must stay headless-safe.
 
 ### Commits and pull requests
@@ -43,7 +44,7 @@ corepack yarn dev     # launch the application when a graphical session is avail
 - Use conventional commit messages (for example `fix(desktop): ...`, `docs: ...`).
 - Run `yarn check` and keep it green before committing.
 - After changing production dependencies, run `yarn workspace dsh-plugin-desktop verify:notices` to refresh the third-party notices and commit the updated `dsh-plugin-desktop/THIRD_PARTY_NOTICES.md`.
-- Documentation changes should stay bilingual and update the `README.i18n.yaml` hash record.
+- Documentation changes should stay bilingual and update the matching `.i18n.yaml` hash record when one exists.
 - Describe the change, its motivation, and how it was verified in the PR; merge after CI passes.
 
 ## Join the technical team
