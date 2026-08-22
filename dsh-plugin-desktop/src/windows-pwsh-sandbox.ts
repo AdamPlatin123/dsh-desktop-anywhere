@@ -26,9 +26,9 @@ export interface WindowsAclAdaptation {
 }
 
 /** Adapted execution inputs passed to the ordinary local executor. */
-export interface AdaptedWindowsAclExecution {
+export interface AdaptedWindowsAclExecution<Spec extends { env?: Record<string, string> | undefined } = ShellExecSpec> {
   /** Spec carrying the runner-only Electron environment. */
-  spec: ShellExecSpec
+  spec: Spec
   /** Exact argv, with the desktop trampoline inserted when required. */
   argv: readonly string[]
 }
@@ -68,11 +68,11 @@ export function desktopWindowsPwshConfig(
  * @param adaptation - executable and runner identities for this Host.
  * @returns unchanged inputs for every non-runner call, otherwise the isolated runner launch.
  */
-export function adaptWindowsAclExecution(
-  spec: ShellExecSpec,
+export function adaptWindowsAclExecution<Spec extends { env?: Record<string, string> | undefined }>(
+  spec: Spec,
   argv: readonly string[],
   adaptation: WindowsAclAdaptation,
-): AdaptedWindowsAclExecution {
+): AdaptedWindowsAclExecution<Spec> {
   const [program, runner, ...args] = argv
   if (adaptation.platform !== 'win32'
     || !adaptation.electron
