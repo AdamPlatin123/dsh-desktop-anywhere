@@ -74,7 +74,8 @@ export function DesktopDialogApp(): JSX.Element {
     let lastHeight = 0
     const measure = (): void => {
       frame = undefined
-      const height = desktopDialogContentHeight(content)
+      const paddingBottom = Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
+      const height = desktopDialogContentHeight(content, footerRef.current ?? undefined, paddingBottom)
       if (height <= 0 || height === lastHeight) return
       lastHeight = height
       reportLayout(height)
@@ -96,7 +97,7 @@ export function DesktopDialogApp(): JSX.Element {
   }, [])
 
   if (state === undefined) return <><DesktopFrame /><main ref={contentRef} className="dshNativeContent flex items-center justify-center p-5"><p className="text-sm text-destructive">Desktop dialog state is unavailable.</p></main></>
-  return <><DesktopFrame /><main ref={contentRef} className="dshNativeContent flex flex-col overflow-hidden p-5">
+  return <><DesktopFrame /><main ref={contentRef} className="dshNativeContent flex flex-col p-5">
     <section ref={bodyRef} className="flex gap-4" role="dialog" aria-labelledby="desktop-dialog-title" aria-describedby={state.detail === undefined ? undefined : 'desktop-dialog-detail'}>
       <div className="mt-0.5 shrink-0"><ToneIcon type={state.type} /></div>
       <div className="min-w-0">

@@ -74,11 +74,13 @@ describe('DesktopDialogWindow', () => {
     expect(parseDesktopDialogLayout('dsh-desktop-dialog://layout?height=236&width=900')).toBeUndefined()
   })
 
-  it('includes an overflowing footer in the renderer-reported content height', () => {
+  it('measures through the footer bottom even when the container metrics exclude it', () => {
     expect(desktopDialogContentHeight({
-      scrollHeight: 166,
-      getBoundingClientRect: () => ({ height: 134 }),
-    })).toBe(166)
+      scrollHeight: 134,
+      getBoundingClientRect: () => ({ top: 0, bottom: 134, height: 134 }),
+    }, {
+      getBoundingClientRect: () => ({ bottom: 147 }),
+    }, 20)).toBe(167)
   })
 
   it('creates a frameless parented modal shadcn window and returns its explicit response', async () => {
