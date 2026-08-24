@@ -1,8 +1,7 @@
 import { AlertCircle, AlertTriangle, HelpCircle, Info } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { Button } from '../components/ui/button.tsx'
 import { DesktopFrame } from '../shared/DesktopFrame.tsx'
-import { desktopDialogContentHeight } from './layout.ts'
 
 const SCHEME = 'dsh-desktop-dialog:'
 
@@ -36,12 +35,6 @@ function respond(response: number): void {
   window.location.assign(url.href)
 }
 
-function reportLayout(height: number): void {
-  const url = new URL(`${SCHEME}//layout`)
-  url.searchParams.set('height', String(height))
-  window.location.assign(url.href)
-}
-
 function ToneIcon({ type }: Pick<DesktopDialogState, 'type'>): JSX.Element {
   const className = type === 'error'
     ? 'text-destructive'
@@ -56,9 +49,6 @@ function ToneIcon({ type }: Pick<DesktopDialogState, 'type'>): JSX.Element {
 
 export function DesktopDialogApp(): JSX.Element {
   const state = decodeState()
-  const contentRef = useRef<HTMLElement>(null)
-  const bodyRef = useRef<HTMLElement>(null)
-  const footerRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (state === undefined) return
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -67,45 +57,17 @@ export function DesktopDialogApp(): JSX.Element {
     window.addEventListener('keydown', onKeyDown)
     return () => { window.removeEventListener('keydown', onKeyDown) }
   }, [state])
-  useLayoutEffect(() => {
-    const content = contentRef.current
-    if (content === null) return
-    let frame: number | undefined
-    let lastHeight = 0
-    const measure = (): void => {
-      frame = undefined
-      const paddingBottom = Number.parseFloat(getComputedStyle(content).paddingBottom) || 0
-      const height = desktopDialogContentHeight(content, footerRef.current ?? undefined, paddingBottom)
-      if (height <= 0 || height === lastHeight) return
-      lastHeight = height
-      reportLayout(height)
-    }
-    const scheduleMeasure = (): void => {
-      frame ??= requestAnimationFrame(measure)
-    }
-    const observer = new ResizeObserver(scheduleMeasure)
-    observer.observe(content)
-    if (bodyRef.current !== null) observer.observe(bodyRef.current)
-    if (footerRef.current !== null) observer.observe(footerRef.current)
-    // Measure after the first layout instead of useLayoutEffect's pre-paint
-    // phase, where Base UI buttons may not yet contribute their final height.
-    scheduleMeasure()
-    return () => {
-      observer.disconnect()
-      if (frame !== undefined) cancelAnimationFrame(frame)
-    }
-  }, [])
 
-  if (state === undefined) return <><DesktopFrame /><main ref={contentRef} className="dshNativeContent flex items-center justify-center p-5"><p className="text-sm text-destructive">Desktop dialog state is unavailable.</p></main></>
-  return <><DesktopFrame /><main ref={contentRef} className="dshNativeContent flex flex-col p-5">
-    <section ref={bodyRef} className="flex gap-4" role="dialog" aria-labelledby="desktop-dialog-title" aria-describedby={state.detail === undefined ? undefined : 'desktop-dialog-detail'}>
+  if (state === undefined) return <><DesktopFrame /><main className="dshNativeContent flex items-center justify-center p-5"><p className="text-sm text-destructive">Desktop dialog state is unavailable.</p></main></>
+  return <><DesktopFrame /><main className="dshNativeContent flex flex-col p-5">
+    <section className="flex gap-4" role="dialog" aria-labelledby="desktop-dialog-title" aria-describedby={state.detail === undefined ? undefined : 'desktop-dialog-detail'}>
       <div className="mt-0.5 shrink-0"><ToneIcon type={state.type} /></div>
       <div className="min-w-0">
         <h1 className="text-base font-semibold leading-tight" id="desktop-dialog-title">{state.message}</h1>
         {state.detail === undefined ? null : <p className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground" id="desktop-dialog-detail">{state.detail}</p>}
       </div>
     </section>
-    <footer ref={footerRef} className="mt-5 flex shrink-0 flex-wrap justify-end gap-2">
+    <footer className="mt-5 flex shrink-0 flex-wrap justify-end gap-2">
       {state.buttons.map((label, index) => <Button autoFocus={index === state.defaultId} key={`${String(index)}:${label}`} onClick={() => { respond(index) }} type="button" variant={index === state.defaultId ? 'default' : index === state.cancelId ? 'outline' : 'secondary'}>{label}</Button>)}
     </footer>
   </main></>
