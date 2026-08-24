@@ -29,6 +29,7 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
   build?: {
     productName?: unknown
     appId?: unknown
+    asar?: unknown
     asarUnpack?: unknown
     afterPack?: unknown
     electronFuses?: unknown
@@ -44,7 +45,7 @@ const manifest = JSON.parse(readFileSync(new URL('package.json', packageRoot), '
       target?: unknown
       x64ArchFiles?: unknown
     }
-    win?: { icon?: unknown; target?: unknown; artifactName?: unknown }
+    win?: { icon?: unknown; target?: unknown; artifactName?: unknown; compression?: unknown }
     nsis?: Record<string, unknown>
     portable?: Record<string, unknown>
     linux?: { icon?: unknown }
@@ -373,6 +374,7 @@ describe('published package surface', () => {
     expect(config).toContain("diagnostics: 'src/diagnostics.ts'")
     expect(config).toContain("notifications: 'src/notifications.ts'")
     expect(config).toContain("'diagnostic-export-worker': 'src/diagnostic-export-worker.ts'")
+    expect(config).toContain('codeSplitting: false')
     expect(config).toContain("entry: { preload: 'src/preload.ts' }")
     expect(config).toContain("entryFileNames: 'preload.cjs'")
     expect(config).toContain("terminal: 'src/terminal.ts'")
@@ -574,12 +576,18 @@ describe('published package surface', () => {
     expect(manifest.version).toBe(workspaceManifest.version)
     expect(manifest.build?.productName).toBe('DSH Desktop')
     expect(manifest.build?.appId).toBe('ai.deepseek.dsh.desktop')
+    expect(manifest.build?.asar).toEqual({ smartUnpack: false })
     expect(manifest.build?.asarUnpack).toEqual([
-      'package.json',
-      'cordis.patch.yml',
-      'build/**',
-      'lib/**',
-      'node_modules/**',
+      'lib/diagnostic-export-worker.js',
+      'node_modules/@deepseek-ai/dsh/config/agent-presets/**',
+      'node_modules/@deepseek-ai/node-addon-landlock-run-linux-*/**',
+      'node_modules/@img/sharp-*/**',
+      'node_modules/@img/sharp-libvips-*/**',
+      'node_modules/@koromix/koffi-*/**',
+      'node_modules/@vscode/ripgrep-*/**',
+      'node_modules/node-addon-require-builtin-*/**',
+      'node_modules/node-pty/prebuilds/**',
+      'node_modules/pnpm/dist/vendor/**',
     ])
     expect(manifest.build?.electronFuses).toEqual({ runAsNode: true })
     expect(manifest.build?.toolsets).toEqual({ nsis: '1.2.1' })
@@ -598,7 +606,17 @@ describe('published package surface', () => {
       'cordis.patch.yml',
       'lib/**',
       'package.json',
+      '!lib/**/*.map',
+      '!node_modules/**/*.map',
+      '!node_modules/**/*.{ts,mts,cts}',
+      '!node_modules/@vscode/ripgrep-win32-{arm64,ia32}/**',
+      '!node_modules/@img/sharp-win32-{arm64,ia32}/**',
+      '!node_modules/@koromix/koffi-win32-{arm64,ia32}/**',
+      '!node_modules/node-addon-require-builtin-win32-{arm64,ia32}-msvc/**',
       '!node_modules/node-pty/build/**',
+      '!node_modules/node-pty/prebuilds/!(${platform}-*)/**',
+      '!node_modules/node-pty/prebuilds/!(${platform}-${arch}|darwin-*)/**',
+      '!node_modules/node-pty/third_party/**',
     ])
     expect(manifest.build?.mac?.icon).toBe('build/app-icon-mac.png')
     expect(manifest.build?.mac?.mergeASARs).toBe(false)
@@ -608,7 +626,9 @@ describe('published package surface', () => {
       target: 'nsis',
       arch: ['x64'],
     }])
-    expect(manifest.build?.win?.artifactName).toBe('DSH-Desktop-${version}-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.artifactName)
+      .toBe('DSH-Desktop-${version}-Windows-${arch}-Portable.${ext}')
+    expect(manifest.build?.win?.compression).toBe('normal')
     expect(manifest.build?.nsis).toEqual({
       license: 'THIRD_PARTY_NOTICES.md',
       oneClick: false,
@@ -620,7 +640,7 @@ describe('published package surface', () => {
       differentialPackage: false,
       shortcutName: 'DSH Desktop',
       useZip: false,
-      artifactName: 'DSH-Desktop-${version}-${arch}-Setup.${ext}',
+      artifactName: 'DSH-Desktop-${version}-Windows-${arch}-Setup.${ext}',
     })
     expect(manifest.build?.linux?.icon).toBe('build/app-icon.png')
   })
@@ -631,6 +651,7 @@ describe('published package surface', () => {
     expect(manifest.scripts?.build).toContain('node scripts/generate-mac-app-icon.mjs')
     expect(manifest.scripts?.['package:dir']).toBe('yarn run build && node scripts/package-dir.mjs')
     expect(packageDir).toContain("CSC_IDENTITY_AUTO_DISCOVERY: 'false'")
+    expect(packageDir).toContain("'--config.npmRebuild=false'")
     expect(manifest.scripts?.['dist:mac']).toBe('node scripts/release-mac.ts')
     expect(manifest.scripts?.['dist:mac-smoke']).toBe('node scripts/package-mac.ts')
     expect(manifest.scripts?.['dist:win']).toBe('node scripts/package-win.ts')
