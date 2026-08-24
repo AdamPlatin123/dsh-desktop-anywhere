@@ -54,6 +54,7 @@ import {
   parseDesktopDialogLayout,
   parseDesktopDialogResponse,
 } from '../src/desktop-dialog-window.ts'
+import { desktopDialogContentHeight } from '../src/native-ui/desktop-dialog/layout.ts'
 
 describe('DesktopDialogWindow', () => {
   beforeEach(() => {
@@ -71,6 +72,13 @@ describe('DesktopDialogWindow', () => {
     expect(parseDesktopDialogLayout('dsh-desktop-dialog://layout?height=0')).toBeUndefined()
     expect(parseDesktopDialogLayout('dsh-desktop-dialog://layout?height=441')).toBeUndefined()
     expect(parseDesktopDialogLayout('dsh-desktop-dialog://layout?height=236&width=900')).toBeUndefined()
+  })
+
+  it('includes an overflowing footer in the renderer-reported content height', () => {
+    expect(desktopDialogContentHeight({
+      scrollHeight: 166,
+      getBoundingClientRect: () => ({ height: 134 }),
+    })).toBe(166)
   })
 
   it('creates a frameless parented modal shadcn window and returns its explicit response', async () => {
