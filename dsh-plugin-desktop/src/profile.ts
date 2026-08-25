@@ -16,7 +16,7 @@ import {
 import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { writeDurableFile } from './profile-checkpoint.ts'
+import { writeDurableFile } from './durable-write.ts'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
