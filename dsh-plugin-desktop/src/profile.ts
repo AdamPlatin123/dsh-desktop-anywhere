@@ -1,5 +1,8 @@
 /** Compatibility profile composition over the official Web bundle and user plugins. */
 
+/** Profile-owned config files are world-readable by convention, unlike the 0o600 checkpoint defaults. */
+const PROFILE_CONFIG_MODE = 0o666
+
 import { createRequire } from 'node:module'
 import {
   existsSync,
@@ -401,7 +404,7 @@ function parseProfileYaml(path: string): ParsedProfileYaml {
 function reconcileProfilePnpmWorkspace(profileDir: string): boolean {
   const path = join(profileDir, 'pnpm-workspace.yaml')
   if (!existsSync(path)) {
-    writeDurableFile(path, Buffer.from(`packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n`, 'utf8'), 0o666)
+    writeDurableFile(path, Buffer.from(`packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n`, 'utf8'), PROFILE_CONFIG_MODE)
     return true
   }
   const { document } = parseProfileYaml(path)
@@ -418,7 +421,7 @@ function reconcileProfilePnpmWorkspace(profileDir: string): boolean {
     document.set('autoInstallPeers', false)
     changed = true
   }
-  if (changed) writeDurableFile(path, Buffer.from(document.toString(), 'utf8'), 0o666)
+  if (changed) writeDurableFile(path, Buffer.from(document.toString(), 'utf8'), PROFILE_CONFIG_MODE)
   return changed
 }
 
@@ -875,7 +878,7 @@ export function prepareDesktopProfile(
   // replaces the file inode, which both resets manual permission changes
   // and briefly opens a share-conflict window on Windows.
   if (!existsSync(rootConfig) || readFileSync(rootConfig, 'utf8') !== '[]\n') {
-    writeDurableFile(rootConfig, Buffer.from('[]\n', 'utf8'), 0o666)
+    writeDurableFile(rootConfig, Buffer.from('[]\n', 'utf8'), PROFILE_CONFIG_MODE)
   }
 
   const desktopPatches = loadOverlayPatches(BIN_NAME, DESKTOP_PATCH_PATH)
