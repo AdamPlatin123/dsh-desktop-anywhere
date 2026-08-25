@@ -146,6 +146,8 @@ describe('desktop update installer download', () => {
     ['an unreviewed host', 'https://attacker.example/installer.dmg'],
     ['an https downgrade', 'http://www.dshdesktop.cn/api/downloads/mac'],
     ['a look-alike suffix', 'https://evil-modelscope.cn/installer.dmg'],
+    ['another user uploads path on the mirror host', 'https://modelscope.cn/models/attacker/deepseek-harness-desktop/resolve/master/installer.dmg'],
+    ['an unreviewed mirror subdomain', 'https://cdn.modelscope.cn/installer.dmg'],
     ['a missing final URL', ''],
   ] as const)('rejects a download that settles on %s', async (_label, finalUrl) => {
     const directory = await temporaryDirectory()
