@@ -1632,6 +1632,7 @@ describe('restricted HTTP boundary', () => {
       '64:ff9b::7f00:1',
       '64:ff9b::c0a8:101',
       '64:ff9b:1::a9fe:a9fe',
+      '2001:0:4136:e378:8000:63bf:3fff:fdd2',
       '2002:c0a8:101::1',
     ]) {
       const client = createRestrictedHttpClient({

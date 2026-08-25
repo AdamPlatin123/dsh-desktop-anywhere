@@ -240,6 +240,7 @@ describe('restricted market image fetcher', () => {
       '64:ff9b::a9fe:a9fe',
       '64:ff9b::7f00:1',
       '64:ff9b:1::c0a8:101',
+      '2001:0:4136:e378:8000:63bf:3fff:fdd2',
       '2002:7f00:1::',
     ]) {
       const fetchImage = createRestrictedImageFetcher({
