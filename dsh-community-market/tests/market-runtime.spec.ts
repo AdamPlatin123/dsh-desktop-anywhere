@@ -1621,6 +1621,36 @@ describe('restricted HTTP boundary', () => {
     )).rejects.toMatchObject({ code: 'blocked-address' })
   })
 
+  it('rejects NAT64 and 6to4 addresses embedding private, loopback, or metadata IPv4', async () => {
+    const request = vi.fn(async () => ({
+      body: Buffer.from('{}'),
+      headers: { 'content-type': 'application/json' },
+      statusCode: 200,
+    }))
+    for (const address of [
+      '64:ff9b::a9fe:a9fe',
+      '64:ff9b::7f00:1',
+      '64:ff9b::c0a8:101',
+      '64:ff9b:1::a9fe:a9fe',
+      '2002:c0a8:101::1',
+    ]) {
+      const client = createRestrictedHttpClient({
+        lookupAddresses: vi.fn(async () => [{ address, family: 6 as const }]),
+        request,
+      })
+      await expect(client.getJson(
+        'https://catalog.example/manifest.json',
+        new AbortController().signal,
+      ), address).rejects.toMatchObject({ code: 'blocked-address' })
+      const literal = createRestrictedHttpClient({ request })
+      await expect(literal.getJson(
+        `https://[${address}]/manifest.json`,
+        new AbortController().signal,
+      ), `literal ${address}`).rejects.toMatchObject({ code: 'blocked-address' })
+    }
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it('caches a completed fixed-catalog response and collapses concurrent reads', async () => {
     let now = 1_000
     let release: ((value: { value: object; finalUrl: string }) => void) | undefined
