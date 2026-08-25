@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { writeDurableFile } from './profile-checkpoint.ts'
+import { writeDurableFile } from './durable-write.ts'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {

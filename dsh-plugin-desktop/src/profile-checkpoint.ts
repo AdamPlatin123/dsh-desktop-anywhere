@@ -10,22 +10,19 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import {
-  closeSync,
   chmodSync,
   existsSync,
-  fsyncSync,
   lstatSync,
   mkdirSync,
-  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
   rmSync,
   unlinkSync,
-  writeSync,
 } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { writeDurableFile } from './durable-write.ts'
 
 const BIN_NAME = 'dsh-plugin-desktop'
 const MANIFEST_VERSION = 3
@@ -237,32 +234,9 @@ function ensureDirectory(path: string): void {
 }
 
 /**
- * Atomic durable file write for profile-owned configuration: create a fresh
- * temporary with `wx`, fsync, then rename over the target. The rename replaces
- * the directory entry instead of following a pre-existing symlink at the
- * target path, and a failure never leaves a truncated file behind. Callers
- * own directory creation and permissions.
+ * Atomic durable file write for profile-owned configuration lives in
+ * ./durable-write.ts; the checkpoint writer keeps its directory conventions.
  */
-export function writeDurableFile(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
-  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
-  let fd: number | undefined
-  try {
-    fd = openSync(temporary, 'wx', mode)
-    writeSync(fd, bytes)
-    fsyncSync(fd)
-    closeSync(fd)
-    fd = undefined
-    renameSync(temporary, path)
-    try {
-      const directoryFd = openSync(dirname(path), 'r')
-      try { fsyncSync(directoryFd) } finally { closeSync(directoryFd) }
-    } catch { /* directory fsync is not supported everywhere */ }
-  } finally {
-    if (fd !== undefined) closeSync(fd)
-    try { unlinkSync(temporary) } catch { /* already renamed */ }
-  }
-}
-
 function writeDurable(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
   ensureDirectory(dirname(path))
   writeDurableFile(path, bytes, mode)
