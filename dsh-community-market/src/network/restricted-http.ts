@@ -1,16 +1,20 @@
 import dns from 'node:dns'
-import { BlockList, isIP } from 'node:net'
+import { isIP } from 'node:net'
 import https from 'node:https'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import type { CatalogHttpClient, CatalogHttpRequestPolicy, CatalogHttpResponse } from '../contracts/types.js'
+import {
+  SYNTHETIC_PROXY_NETWORK,
+  SYNTHETIC_PROXY_PREFIX,
+  createBlockedAddresses,
+  createSyntheticProxyAddresses,
+} from './blocked-subnets.js'
 
 const MAX_REDIRECTS = 3
 const MAX_BODY_BYTES = 2 * 1024 * 1024
 const CONNECT_TIMEOUT_MS = 8_000
 const FIRST_BYTE_TIMEOUT_MS = 12_000
 const TOTAL_TIMEOUT_MS = 30_000
-const SYNTHETIC_PROXY_NETWORK = '198.18.0.0'
-const SYNTHETIC_PROXY_PREFIX = 15
 
 export class CatalogNetworkError extends Error {
   constructor(readonly code: 'invalid-url' | 'blocked-address' | 'redirect' | 'timeout' | 'http' | 'response') {
@@ -19,34 +23,7 @@ export class CatalogNetworkError extends Error {
   }
 }
 
-const blockedAddresses = new BlockList()
-for (const [network, prefix] of [
-  ['0.0.0.0', 8],
-  ['10.0.0.0', 8],
-  ['100.64.0.0', 10],
-  ['127.0.0.0', 8],
-  ['169.254.0.0', 16],
-  ['172.16.0.0', 12],
-  ['192.0.0.0', 24],
-  ['192.168.0.0', 16],
-  ['198.18.0.0', 15],
-  ['224.0.0.0', 3],
-] as const) {
-  blockedAddresses.addSubnet(network, prefix, 'ipv4')
-}
-for (const [network, prefix] of [
-  ['::', 128],
-  ['::1', 128],
-  ['64:ff9b::', 96],
-  ['64:ff9b:1::', 48],
-  ['2001::', 32],
-  ['2002::', 16],
-  ['fc00::', 7],
-  ['fe80::', 10],
-  ['ff00::', 8],
-] as const) {
-  blockedAddresses.addSubnet(network, prefix, 'ipv6')
-}
+const blockedAddresses = createBlockedAddresses()
 
 export interface PinnedAddress {
   readonly address: string
@@ -76,8 +53,7 @@ export interface RestrictedHttpClientOptions {
   readonly maxBodyBytes?: number
 }
 
-const syntheticProxyAddresses = new BlockList()
-syntheticProxyAddresses.addSubnet(SYNTHETIC_PROXY_NETWORK, SYNTHETIC_PROXY_PREFIX, 'ipv4')
+const syntheticProxyAddresses = createSyntheticProxyAddresses()
 
 function assertSafeAddress(address: string, allowSyntheticProxyAddress = false): 4 | 6 {
   const normalized = address.replace(/^\[|\]$/gu, '').split('%', 1)[0]!

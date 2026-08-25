@@ -1634,6 +1634,8 @@ describe('restricted HTTP boundary', () => {
       '64:ff9b:1::a9fe:a9fe',
       '2001:0:4136:e378:8000:63bf:3fff:fdd2',
       '2002:c0a8:101::1',
+      '::a9fe:a9fe',
+      '::7f00:1',
     ]) {
       const client = createRestrictedHttpClient({
         lookupAddresses: vi.fn(async () => [{ address, family: 6 as const }]),
@@ -1650,6 +1652,33 @@ describe('restricted HTTP boundary', () => {
       ), `literal ${address}`).rejects.toMatchObject({ code: 'blocked-address' })
     }
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('still allows ordinary global IPv6 and blocks the whole NAT64 prefix', async () => {
+    const request = vi.fn(async () => ({
+      body: Buffer.from('{}'),
+      headers: { 'content-type': 'application/json' },
+      statusCode: 200,
+    }))
+    const allowed = createRestrictedHttpClient({
+      lookupAddresses: vi.fn(async () => [{ address: '2606:4700:4700::1111', family: 6 as const }]),
+      request,
+    })
+    await expect(allowed.getJson(
+      'https://catalog.example/manifest.json',
+      new AbortController().signal,
+    )).resolves.toBeTruthy()
+
+    // The well-known NAT64 prefix is blocked as a whole, including forms
+    // embedding a public IPv4; the blocklist must not grow a per-target hole.
+    const nat64Public = createRestrictedHttpClient({
+      lookupAddresses: vi.fn(async () => [{ address: '64:ff9b::808:808', family: 6 as const }]),
+      request,
+    })
+    await expect(nat64Public.getJson(
+      'https://catalog.example/manifest.json',
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'blocked-address' })
   })
 
   it('caches a completed fixed-catalog response and collapses concurrent reads', async () => {
