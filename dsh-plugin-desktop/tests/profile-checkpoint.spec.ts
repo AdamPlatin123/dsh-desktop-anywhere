@@ -148,12 +148,15 @@ describe('Desktop profile health checkpoints', () => {
   })
 
   it('treats a corrupted slot as empty and heals it on the next healthy capture', () => {
-    const target = fixture()
+    const logError = vi.fn()
+    const target = fixture({ logError })
     target.checkpoint.captureHealthy()
     const slot = target.checkpoint.listSlots()[0]!
     writeFileSync(join(slot.snapshotDirectory, 'package.json'), '{"name":"corrupted"}\n')
 
     expect(target.checkpoint.listSlots()[0]).toMatchObject({ slotId: 'slot-1', snapshotExists: false })
+    expect(logError).toHaveBeenCalledTimes(1)
+    expect(logError.mock.calls[0]?.[0]).toContain('slot-1 failed validation')
     expect(target.checkpoint.captureHealthy()).toMatchObject({ status: 'captured', slotId: 'slot-1' })
     expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
   })

@@ -81,6 +81,8 @@ export interface ProfileCheckpointOptions {
   readonly appVersion?: string
   readonly maxFileBytes?: Partial<Record<DesktopProfileCheckpointFilename, number>>
   readonly now?: () => number
+  /** Observability sink for slots that stop validating and self-heal as empty. */
+  readonly logError?: (message: string) => void
 }
 
 export interface ProfileCheckpointFileRecord {
@@ -323,6 +325,7 @@ export class DesktopProfileCheckpoint {
 
   private readonly limits: Record<DesktopProfileCheckpointFilename, number>
   private readonly now: () => number
+  private readonly logError: ((message: string) => void) | undefined
 
   constructor(options: ProfileCheckpointOptions) {
     const userData = options.userDataDir ?? options.userData
@@ -336,6 +339,7 @@ export class DesktopProfileCheckpoint {
     this.provider = assertIdentifier('provider', options.provider ?? 'unknown')
     this.appVersion = assertAppVersion(options.appVersion ?? 'unknown')
     this.now = options.now ?? Date.now
+    this.logError = options.logError
     this.limits = { ...FILE_LIMITS, ...(options.maxFileBytes ?? {}) }
     for (const name of DESKTOP_PROFILE_CHECKPOINT_FILES) {
       if (!Number.isSafeInteger(this.limits[name]) || this.limits[name] < 0) fail(`invalid size limit for ${name}`)
@@ -625,7 +629,14 @@ export class DesktopProfileCheckpoint {
   private tryReadSnapshot(directory: string, requireComplete: boolean): LoadedSnapshot | undefined {
     try {
       return this.readSnapshot(directory, requireComplete)
-    } catch {
+    } catch (cause) {
+      // The slot will be reported as empty and overwritten by the next
+      // healthy capture; surface why so silent corruption stays diagnosable.
+      this.logError?.(
+        `${BIN_NAME}: checkpoint slot ${basename(directory)} failed validation and will be recaptured: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+      )
       return undefined
     }
   }
