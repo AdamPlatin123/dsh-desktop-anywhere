@@ -116,8 +116,12 @@ describe('profile materializer', () => {
   })
 
   it('scrubs credential-like and DSH-private entries from the inherited environment', async () => {
+    const savedNodeOptions = process.env.NODE_OPTIONS
+    const savedNodePath = process.env.NODE_PATH
     process.env.DESKTOP_TEST_MARKET_TOKEN = 'secret-token'
     process.env.DSH_INTERNAL_NOTE = 'internal'
+    process.env.NODE_OPTIONS = '--require=/tmp/payload.js'
+    process.env.NODE_PATH = '/tmp/rogue-modules'
     const child = fakeChild()
     let spawnOptions: SpawnOptions | undefined
     const spawn = vi.fn((_command: string, _args: readonly string[], selectedOptions: SpawnOptions) => {
@@ -133,10 +137,16 @@ describe('profile materializer', () => {
     } finally {
       delete process.env.DESKTOP_TEST_MARKET_TOKEN
       delete process.env.DSH_INTERNAL_NOTE
+      if (savedNodeOptions === undefined) delete process.env.NODE_OPTIONS
+      else process.env.NODE_OPTIONS = savedNodeOptions
+      if (savedNodePath === undefined) delete process.env.NODE_PATH
+      else process.env.NODE_PATH = savedNodePath
     }
     const environment = spawnOptions?.env as NodeJS.ProcessEnv
     expect(environment.DESKTOP_TEST_MARKET_TOKEN).toBeUndefined()
     expect(environment.DSH_INTERNAL_NOTE).toBeUndefined()
+    expect(environment.NODE_OPTIONS).toBeUndefined()
+    expect(environment.NODE_PATH).toBeUndefined()
     expect(environment.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(environment.NODE).toBe('/private/node-bin/node')
   })
