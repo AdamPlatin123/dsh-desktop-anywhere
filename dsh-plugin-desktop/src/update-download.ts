@@ -1,6 +1,6 @@
 /** Headless, confirmation-gated downloads for DSH Desktop installers. */
 
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
@@ -130,6 +130,7 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   const platform = validatedPlatform(options.platform)
   validatedVersion(options.version)
   const destinationPath = validatedArtifactPath(options.destinationPath, platform)
+  const expectedSha256 = normalizedExpectedDigest(options.expectedSha256)
   const paths = await prepareDownloadPaths(destinationPath)
   throwIfAborted(options.signal)
 
@@ -164,8 +165,8 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
     await writeResponseBody(paths.temporary, response.body, options.signal)
     throwIfAborted(options.signal)
     await validateArtifact(paths.temporary, platform)
-    if (options.expectedSha256 !== undefined) {
-      await assertInstallerDigest(paths.temporary, options.expectedSha256)
+    if (expectedSha256 !== undefined) {
+      await assertInstallerDigest(paths.temporary, expectedSha256)
     }
     throwIfAborted(options.signal)
     await unlinkIfPresent(paths.completed)
@@ -422,13 +423,39 @@ function assertAllowedDownloadOrigin(finalUrl: string): void {
   }
 }
 
-async function assertInstallerDigest(filename: string, expected: string): Promise<void> {
-  if (!/^[0-9a-f]{64}$/u.test(expected)) {
+/** Normalize the optional expected digest at option validation time, before any network work. */
+function normalizedExpectedDigest(expected: string | undefined): string | undefined {
+  if (expected === undefined) return undefined
+  const normalized = expected.trim().toLowerCase()
+  if (!/^[0-9a-f]{64}$/u.test(normalized)) {
     throw new UpdateDownloadError('invalid-options', 'The expected installer digest is not a hex SHA-256.')
   }
-  const bytes = await readFile(filename)
-  const actual = createHash('sha256').update(bytes).digest('hex')
-  if (actual !== expected) {
+  return normalized
+}
+
+/**
+ * Verify the downloaded installer against the published digest. The file is
+ * hashed in bounded chunks — installers reach hundreds of megabytes, and a
+ * single whole-file buffer would spike main-process memory — and compared in
+ * constant time over the decoded bytes.
+ */
+async function assertInstallerDigest(filename: string, expected: string): Promise<void> {
+  const expectedBytes = Buffer.from(expected, 'hex')
+  const hash = createHash('sha256')
+  const handle = await open(filename, 'r')
+  try {
+    const chunk = Buffer.alloc(1024 * 1024)
+    while (true) {
+      const result = await handle.read(chunk, 0, chunk.byteLength, null)
+      if (result.bytesRead === 0) break
+      hash.update(result.bytesRead === chunk.byteLength ? chunk : chunk.subarray(0, result.bytesRead))
+    }
+  } finally {
+    await handle.close()
+  }
+  const actualBytes = hash.digest()
+  if (actualBytes.byteLength !== expectedBytes.byteLength
+    || !timingSafeEqual(actualBytes, expectedBytes)) {
     throw new UpdateDownloadError(
       'invalid-artifact',
       'The update installer does not match the published digest.',

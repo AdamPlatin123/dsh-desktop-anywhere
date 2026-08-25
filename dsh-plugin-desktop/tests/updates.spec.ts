@@ -248,6 +248,24 @@ describe('desktop update Host plugin', () => {
     await pending
   })
 
+  it('uses the digest from the recheck, not the first check', async () => {
+    vi.useFakeTimers()
+    let call = 0
+    const harness = await createHarness({
+      packaged: false,
+      request: async () => {
+        call += 1
+        return Response.json({ version: '2.1.0', sha256: { mac: call === 1 ? 'c'.repeat(64) : 'd'.repeat(64) } })
+      },
+      confirmDownload: async () => true,
+    })
+
+    const pending = harness.tray.invoke()
+    await vi.waitFor(() => { expect(harness.downloadAndOpen).toHaveBeenCalledOnce() })
+    expect(harness.downloadAndOpen.mock.calls[0]?.[2]).toEqual({ darwin: 'd'.repeat(64) })
+    await pending
+  })
+
   it('omits the digest argument when the service publishes none', async () => {
     vi.useFakeTimers()
     const harness = await createHarness({
