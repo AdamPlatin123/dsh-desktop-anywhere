@@ -33,15 +33,21 @@ export type UpdateDownloadErrorCode =
 export type UpdateArtifactRequest = (url: string, init: RequestInit) => Promise<Response>
 
 /**
- * Download origins the installer fetch may settle on: the fixed product
- * endpoint plus the reviewed mirrors it redirects through. A redirect chain
+ * Download targets the installer fetch may settle on: the fixed product
+ * endpoint plus the reviewed mirror it redirects through. The mirror is
+ * pinned to the maintainer's repository path, not just the host, because the
+ * host serves arbitrary user uploads under other paths. A redirect chain
  * that ends anywhere else is treated as a compromised download service
- * instead of being executed after a magic-number check.
+ * instead of being executed after a magic-number check. Adding or moving a
+ * target requires a client release.
  */
-const ALLOWED_DOWNLOAD_HOSTS: readonly (string | `*.${string}`)[] = [
-  'www.dshdesktop.cn',
-  'modelscope.cn',
-  '*.modelscope.cn',
+const ALLOWED_DOWNLOAD_TARGETS: readonly {
+  readonly host: string
+  readonly pathPrefix?: string
+}[] = [
+  { host: 'www.dshdesktop.cn' },
+  { host: 'dshdesktop.cn' },
+  { host: 'modelscope.cn', pathPrefix: '/models/t4wefan/deepseek-harness-desktop/' },
 ]
 
 /** Inputs for one user-confirmed installer download. */
@@ -404,10 +410,9 @@ function assertAllowedDownloadOrigin(finalUrl: string): void {
     throw new UpdateDownloadError('redirect-origin', 'The update download must settle on HTTPS.')
   }
   const host = parsed.hostname.toLowerCase()
-  const allowed = ALLOWED_DOWNLOAD_HOSTS.some(entry =>
-    entry.startsWith('*.')
-      ? host.endsWith(entry.slice(1)) && host.length > entry.length - 1
-      : host === entry,
+  const allowed = ALLOWED_DOWNLOAD_TARGETS.some(target =>
+    host === target.host
+    && (target.pathPrefix === undefined || parsed.pathname.startsWith(target.pathPrefix)),
   )
   if (!allowed) {
     throw new UpdateDownloadError(
