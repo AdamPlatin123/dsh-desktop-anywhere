@@ -163,6 +163,37 @@ describe('profile materializer', () => {
     expect(environment.NODE).toBe('/private/node-bin/node')
   })
 
+  it('drops case-variant duplicates of the explicit keys on Windows', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const child = fakeChild()
+    let observed: NodeJS.ProcessEnv | undefined
+    const spawn = vi.fn((_command: string, _args: readonly string[], selectedOptions: SpawnOptions) => {
+      observed = selectedOptions.env
+      return child as unknown as ChildProcess
+    }) as unknown as ProfileMaterializerSpawn
+    try {
+      const resultPromise = materializeProfile({
+        ...options(spawn),
+        scrubParent: () => ({ Path: '/inherited', dsh_home: '/rogue', HOME: '/home/test' } as NodeJS.ProcessEnv),
+      })
+      child.stdout.end('installed\n')
+      child.stderr.end('')
+      child.emit('close', 0, null)
+      await resultPromise
+    } finally {
+      platformSpy.mockRestore()
+    }
+    // Windows matches environment keys case-insensitively; the inherited
+    // spellings of explicit overrides must be dropped while unrelated
+    // entries survive and the explicit values win.
+    expect(observed).toBeDefined()
+    expect('Path' in (observed ?? {})).toBe(false)
+    expect(observed?.dsh_home).toBeUndefined()
+    expect(observed?.HOME).toBe('/home/test')
+    expect(observed?.DSH_HOME).toBe('/Users/test/.dsh')
+    expect(observed?.PATH).toBe(`/private/node-bin${delimiter}${process.env.PATH ?? ''}`)
+  })
+
   it('rejects a non-zero package-manager exit and preserves bounded diagnostics', async () => {
     const child = fakeChild()
     const spawn = vi.fn(() => child as unknown as ChildProcess) as unknown as ProfileMaterializerSpawn
