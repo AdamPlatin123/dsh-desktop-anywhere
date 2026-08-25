@@ -110,14 +110,27 @@ const MATERIALIZER_ENV_KEYS = [
 ] as const
 
 /**
+ * Environment keys that inject modules or resolution paths into a Node
+ * runtime. The child runs the Electron binary with ELECTRON_RUN_AS_NODE=1,
+ * so an inherited NODE_OPTIONS (--require, --import) or NODE_PATH would
+ * execute attacker-chosen code inside the install subprocess. The shared
+ * scrubbedParentEnv does not strip them yet; removed here until it does.
+ */
+const MATERIALIZER_STRIPPED_ENV_KEYS = new Set(['NODE_OPTIONS', 'NODE_PATH'].map(key => key.toUpperCase()))
+
+/**
  * Start from the credential-scrubbed parent environment, like the pnpm
  * subprocess path does, so secrets and DSH-private entries never reach the
- * install subprocess. On Windows, where environment keys match
- * case-insensitively, drop inherited spellings that collide with an explicit
- * override to avoid handing spawn duplicate keys.
+ * install subprocess. Node loader-injection variables are removed outright.
+ * On Windows, where environment keys match case-insensitively, drop inherited
+ * spellings that collide with an explicit override to avoid handing spawn
+ * duplicate keys.
  */
 function materializerParentEnv(scrubParent: () => NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const parent = { ...scrubParent() }
+  for (const inherited of Object.keys(parent)) {
+    if (MATERIALIZER_STRIPPED_ENV_KEYS.has(inherited.toUpperCase())) delete parent[inherited]
+  }
   if (process.platform === 'win32') {
     const explicit = new Set(MATERIALIZER_ENV_KEYS.map(key => key.toUpperCase()))
     for (const inherited of Object.keys(parent)) {
