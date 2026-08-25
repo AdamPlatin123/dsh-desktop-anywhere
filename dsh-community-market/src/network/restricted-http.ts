@@ -298,6 +298,7 @@ export function createRestrictedHttpClient(
 export interface CachedCatalogHttpClientOptions {
   readonly ttlMs?: number
   readonly now?: () => number
+  readonly maxEntries?: number
 }
 
 interface CachedCatalogResponse {
@@ -306,6 +307,34 @@ interface CachedCatalogResponse {
   inFlight?: Promise<CatalogHttpResponse>
   inFlightController?: AbortController
   waiters: number
+}
+
+/**
+ * Drop expired or abandoned entries first, then the least recently used ones,
+ * until the cache is back within bounds. Entries whose request is still in
+ * flight are skipped so concurrent reads of the same URL keep collapsing into
+ * one delegate request; their object graph is collected once the last waiter
+ * settles if they were already removed.
+ */
+function evictCachedEntries(
+  cache: Map<string, CachedCatalogResponse>,
+  maxEntries: number,
+  now: () => number,
+  ttlMs: number,
+): void {
+  for (const [key, entry] of cache) {
+    if (entry.inFlight !== undefined) continue
+    if (entry.response === undefined) {
+      cache.delete(key)
+    } else if (entry.savedAt !== undefined && now() - entry.savedAt >= ttlMs) {
+      cache.delete(key)
+    }
+  }
+  for (const [key, entry] of cache) {
+    if (cache.size <= maxEntries) return
+    if (entry.inFlight !== undefined) continue
+    cache.delete(key)
+  }
 }
 
 function awaitCachedResponse(
@@ -343,6 +372,7 @@ export function createCachedCatalogHttpClient(
 ): CatalogHttpClient {
   const ttlMs = options.ttlMs ?? 5 * 60 * 1000
   const now = options.now ?? Date.now
+  const maxEntries = options.maxEntries ?? 256
   const cache = new Map<string, CachedCatalogResponse>()
   return {
     async getJson(url, signal, policy: CatalogHttpRequestPolicy = {}) {
@@ -354,6 +384,10 @@ export function createCachedCatalogHttpClient(
       if (entry === undefined || policy.cacheMode === 'reload') {
         entry = { waiters: 0 }
         cache.set(key, entry)
+      } else if (entry.response !== undefined && entry.savedAt !== undefined && now() - entry.savedAt < ttlMs) {
+        // Refresh insertion order so eviction removes the least recently used entry.
+        cache.delete(key)
+        cache.set(key, entry)
       }
       if (entry.response !== undefined && entry.savedAt !== undefined && now() - entry.savedAt < ttlMs) {
         return entry.response
@@ -363,6 +397,10 @@ export function createCachedCatalogHttpClient(
         entry.inFlightController = inFlightController
         const request = delegate.getJson(url, inFlightController.signal, policy)
         entry.inFlight = request
+        // Evict only once the new entry is in flight: entries without a
+        // response and without an in-flight request are eviction candidates,
+        // and the freshly created one must not sweep itself.
+        evictCachedEntries(cache, maxEntries, now, ttlMs)
         void request.then(
           response => {
             if (entry.inFlight !== request || inFlightController.signal.aborted) return
