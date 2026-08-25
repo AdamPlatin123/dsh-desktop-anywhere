@@ -16,7 +16,15 @@ export function writeDurableFile(path: string, bytes: Uint8Array, mode = 0o600):
   let fd: number | undefined
   try {
     fd = openSync(temporary, 'wx', mode)
-    writeSync(fd, bytes)
+    // writeSync may write fewer bytes than requested (interrupted by a
+    // signal, filesystem quirks); loop until the buffer is fully consumed
+    // so fsync and rename never promote a short write to "complete".
+    let written = 0
+    while (written < bytes.byteLength) {
+      const progress = writeSync(fd, bytes, written)
+      if (progress <= 0) throw new Error('durable write made no progress')
+      written += progress
+    }
     fsyncSync(fd)
     closeSync(fd)
     fd = undefined
