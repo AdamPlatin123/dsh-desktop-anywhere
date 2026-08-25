@@ -398,6 +398,7 @@ export class DefaultCatalogService implements CatalogService {
   private readonly catalogScanGates = new Map<string, ConcurrencyGate>()
   private readonly cursorTtlMs: number
   private readonly maxCursorEntries: number
+  private readonly maxScanCacheEntries: number
   private readonly catalogScanCacheTtlMs: number
   private readonly sourceConcurrency: ConcurrencyGate
   private readonly now: () => number
@@ -415,6 +416,7 @@ export class DefaultCatalogService implements CatalogService {
     this.catalogScanCacheTtlMs = options.catalogScanCacheTtlMs ?? options.cacheTtlMs ?? DEFAULT_CATALOG_SCAN_CACHE_TTL_MS
     const maxConcurrentSources = options.maxConcurrentSources ?? 4
     const maxCacheEntries = options.maxCacheEntries ?? 256
+    this.maxScanCacheEntries = maxCacheEntries
     if (!Number.isSafeInteger(maxCacheEntries) || maxCacheEntries < 1) {
       throw new TypeError('invalid catalog cache entry limit')
     }
@@ -613,6 +615,26 @@ export class DefaultCatalogService implements CatalogService {
     })
   }
 
+  /**
+   * Drop the least recently inserted scan indexes until the cache is back
+   * within bounds. Evicting a key also drops its generation counter and, when
+   * no scan is active, its gate and controller set: a queued scan for that key
+   * re-validates its generation before running, so stale bookkeeping never
+   * lets a superseded scan complete.
+   */
+  private evictCatalogScanCache(): void {
+    for (const key of this.catalogScanCache.keys()) {
+      if (this.catalogScanCache.size <= this.maxScanCacheEntries) return
+      this.catalogScanCache.delete(key)
+      this.catalogScanGenerations.delete(key)
+      const controllers = this.catalogScanControllers.get(key)
+      if (controllers === undefined || controllers.size === 0) {
+        this.catalogScanControllers.delete(key)
+        this.catalogScanGates.delete(key)
+      }
+    }
+  }
+
   async scanCatalog(
     signal: AbortSignal,
     options: CatalogScanOptions = {},
@@ -663,7 +685,12 @@ export class DefaultCatalogService implements CatalogService {
       && cached.sourceGeneration === sourceGeneration
       && cached.scanGeneration === scanGeneration
       && this.now() < cached.expiresAt
-    ) return cachedScanView(cached, 'cached')
+    ) {
+      // Refresh insertion order so eviction removes the least recently used scan.
+      this.catalogScanCache.delete(key)
+      this.catalogScanCache.set(key, cached)
+      return cachedScanView(cached, 'cached')
+    }
     if (cached !== undefined) {
       if (this.now() >= cached.expiresAt) this.revokeSourceCursors(source.sourceRecordId)
       this.catalogScanCache.delete(key)
@@ -750,6 +777,7 @@ export class DefaultCatalogService implements CatalogService {
           scanKey: randomUUID(),
         }
         this.catalogScanCache.set(key, entry)
+        this.evictCatalogScanCache()
         for (const snapshot of entry.snapshots) {
           try { this.observeSnapshot?.(snapshot) } catch { /* installation is optional; catalog browsing remains available */ }
         }
