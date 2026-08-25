@@ -115,6 +115,32 @@ describe('profile materializer', () => {
     ])
   })
 
+  it('scrubs credential-like and DSH-private entries from the inherited environment', async () => {
+    process.env.DESKTOP_TEST_MARKET_TOKEN = 'secret-token'
+    process.env.DSH_INTERNAL_NOTE = 'internal'
+    const child = fakeChild()
+    let spawnOptions: SpawnOptions | undefined
+    const spawn = vi.fn((_command: string, _args: readonly string[], selectedOptions: SpawnOptions) => {
+      spawnOptions = selectedOptions
+      return child as unknown as ChildProcess
+    }) as unknown as ProfileMaterializerSpawn
+    try {
+      const resultPromise = materializeProfile(options(spawn))
+      child.stdout.end('installed\n')
+      child.stderr.end('')
+      child.emit('close', 0, null)
+      await resultPromise
+    } finally {
+      delete process.env.DESKTOP_TEST_MARKET_TOKEN
+      delete process.env.DSH_INTERNAL_NOTE
+    }
+    const environment = spawnOptions?.env as NodeJS.ProcessEnv
+    expect(environment.DESKTOP_TEST_MARKET_TOKEN).toBeUndefined()
+    expect(environment.DSH_INTERNAL_NOTE).toBeUndefined()
+    expect(environment.ELECTRON_RUN_AS_NODE).toBe('1')
+    expect(environment.NODE).toBe('/private/node-bin/node')
+  })
+
   it('rejects a non-zero package-manager exit and preserves bounded diagnostics', async () => {
     const child = fakeChild()
     const spawn = vi.fn(() => child as unknown as ChildProcess) as unknown as ProfileMaterializerSpawn
