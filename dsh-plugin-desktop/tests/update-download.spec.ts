@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DESKTOP_DOWNLOAD_URLS,
   MAX_UPDATE_DOWNLOAD_BYTES,
@@ -173,6 +173,16 @@ describe('desktop update installer download', () => {
     })
     expect(await readFile(valid)).toEqual(Buffer.from(artifact))
 
+    // Hex case is normalized, matching the version-checker parsing path.
+    const upper = await downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.4',
+      destinationPath: destinationPath(directory, 'darwin', '2.3.4'),
+      request: async () => chunkedResponse([artifact]),
+      expectedSha256: digest.toUpperCase(),
+    })
+    expect(await readFile(upper)).toEqual(Buffer.from(artifact))
+
     const otherDirectory = await temporaryDirectory()
     await expectFailure(downloadDesktopUpdate({
       platform: 'darwin',
@@ -182,6 +192,20 @@ describe('desktop update installer download', () => {
       expectedSha256: 'a'.repeat(64),
     }), 'invalid-artifact')
     await expectNoPartialFiles(otherDirectory)
+  })
+
+  it('rejects a malformed expected digest before issuing any request', async () => {
+    const directory = await temporaryDirectory()
+    const request = vi.fn()
+    await expectFailure(downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.3',
+      destinationPath: destinationPath(directory, 'darwin', '2.3.3'),
+      request,
+      expectedSha256: 'not-a-sha256',
+    }), 'invalid-options')
+    expect(request).not.toHaveBeenCalled()
+    await expectNoPartialFiles(directory)
   })
 
   it('accepts canonical stable SemVer build metadata in the private artifact path', async () => {
