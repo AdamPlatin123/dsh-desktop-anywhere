@@ -1,6 +1,6 @@
 /** Headless, confirmation-gated downloads for DSH Desktop installers. */
 
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { chmod, lstat, mkdir, open, readFile, rename, unlink } from 'node:fs/promises'
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path'
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write'
@@ -26,10 +26,23 @@ export type UpdateDownloadErrorCode =
   | 'invalid-artifact'
   | 'invalid-options'
   | 'network'
+  | 'redirect-origin'
   | 'response-too-large'
 
 /** Fetch-compatible request boundary supplied by the Electron adapter or a test. */
 export type UpdateArtifactRequest = (url: string, init: RequestInit) => Promise<Response>
+
+/**
+ * Download origins the installer fetch may settle on: the fixed product
+ * endpoint plus the reviewed mirrors it redirects through. A redirect chain
+ * that ends anywhere else is treated as a compromised download service
+ * instead of being executed after a magic-number check.
+ */
+const ALLOWED_DOWNLOAD_HOSTS: readonly (string | `*.${string}`)[] = [
+  'www.dshdesktop.cn',
+  'modelscope.cn',
+  '*.modelscope.cn',
+]
 
 /** Inputs for one user-confirmed installer download. */
 export interface DownloadDesktopUpdateOptions {
@@ -43,6 +56,12 @@ export interface DownloadDesktopUpdateOptions {
   readonly request: UpdateArtifactRequest
   /** Optional cancellation signal owned by the update coordinator. */
   readonly signal?: AbortSignal
+  /**
+   * Hex SHA-256 the downloaded installer must match. Optional so the current
+   * version endpoint can adopt it without a client protocol break; when the
+   * service publishes digests this becomes a hard gate in front of execution.
+   */
+  readonly expectedSha256?: string
 }
 
 /** Typed failure from installer request, validation, or cancellation. */
@@ -131,6 +150,7 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   if (response.body === null) {
     throw new UpdateDownloadError('empty-body', 'The update download service returned an empty body.')
   }
+  assertAllowedDownloadOrigin(response.url)
   assertDeclaredSize(response)
 
   let failure: unknown
@@ -138,6 +158,9 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
     await writeResponseBody(paths.temporary, response.body, options.signal)
     throwIfAborted(options.signal)
     await validateArtifact(paths.temporary, platform)
+    if (options.expectedSha256 !== undefined) {
+      await assertInstallerDigest(paths.temporary, options.expectedSha256)
+    }
     throwIfAborted(options.signal)
     await unlinkIfPresent(paths.completed)
     await rename(paths.temporary, paths.completed)
@@ -366,6 +389,44 @@ function assertDeclaredSize(response: Response): void {
     throw new UpdateDownloadError(
       'response-too-large',
       `The update installer exceeds ${String(MAX_UPDATE_DOWNLOAD_BYTES)} bytes.`,
+    )
+  }
+}
+
+function assertAllowedDownloadOrigin(finalUrl: string): void {
+  let parsed: URL
+  try {
+    parsed = new URL(finalUrl)
+  } catch {
+    throw new UpdateDownloadError('redirect-origin', 'The update download response had no usable URL.')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new UpdateDownloadError('redirect-origin', 'The update download must settle on HTTPS.')
+  }
+  const host = parsed.hostname.toLowerCase()
+  const allowed = ALLOWED_DOWNLOAD_HOSTS.some(entry =>
+    entry.startsWith('*.')
+      ? host.endsWith(entry.slice(1)) && host.length > entry.length - 1
+      : host === entry,
+  )
+  if (!allowed) {
+    throw new UpdateDownloadError(
+      'redirect-origin',
+      'The update download was redirected to an unreviewed origin.',
+    )
+  }
+}
+
+async function assertInstallerDigest(filename: string, expected: string): Promise<void> {
+  if (!/^[0-9a-f]{64}$/u.test(expected)) {
+    throw new UpdateDownloadError('invalid-options', 'The expected installer digest is not a hex SHA-256.')
+  }
+  const bytes = await readFile(filename)
+  const actual = createHash('sha256').update(bytes).digest('hex')
+  if (actual !== expected) {
+    throw new UpdateDownloadError(
+      'invalid-artifact',
+      'The update installer does not match the published digest.',
     )
   }
 }

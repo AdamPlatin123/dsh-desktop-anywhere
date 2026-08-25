@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,9 +42,13 @@ function windowsArtifact(): Uint8Array {
   return artifact
 }
 
-function chunkedResponse(chunks: readonly Uint8Array[], headers: HeadersInit = {}): Response {
+function chunkedResponse(
+  chunks: readonly Uint8Array[],
+  headers: HeadersInit = {},
+  url: string = 'https://www.dshdesktop.cn/api/downloads/mac',
+): Response {
   let index = 0
-  return new Response(new ReadableStream<Uint8Array>({
+  const response = new Response(new ReadableStream<Uint8Array>({
     pull(controller) {
       const chunk = chunks[index]
       index += 1
@@ -51,6 +56,8 @@ function chunkedResponse(chunks: readonly Uint8Array[], headers: HeadersInit = {
       else controller.enqueue(chunk)
     },
   }), { status: 200, headers })
+  Object.defineProperty(response, 'url', { value: url })
+  return response
 }
 
 async function expectFailure(
@@ -110,13 +117,69 @@ describe('desktop update installer download', () => {
       destinationPath: destinationPath(directory, 'win32', '2.2.0'),
       request: async (url) => {
         expect(url).toBe(DESKTOP_DOWNLOAD_URLS.win32)
-        return chunkedResponse([artifact])
+        return chunkedResponse([artifact], {}, 'https://www.dshdesktop.cn/api/downloads/windows')
       },
     })
 
     expect(result).toBe(join(directory, 'DSH-Desktop-2.2.0-windows.exe'))
     expect(await readFile(result)).toEqual(Buffer.from(artifact))
     await expectNoPartialFiles(directory)
+  })
+
+  it('accepts a redirect that settles on a reviewed mirror origin', async () => {
+    const directory = await temporaryDirectory()
+    const artifact = dmgArtifact()
+    const result = await downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.2.1',
+      destinationPath: destinationPath(directory, 'darwin', '2.2.1'),
+      request: async () => chunkedResponse(
+        [artifact],
+        {},
+        'https://modelscope.cn/models/t4wefan/deepseek-harness-desktop/resolve/master/DSH-Desktop-2.2.1-universal.dmg',
+      ),
+    })
+    expect(await readFile(result)).toEqual(Buffer.from(artifact))
+  })
+
+  it.each([
+    ['an unreviewed host', 'https://attacker.example/installer.dmg'],
+    ['an https downgrade', 'http://www.dshdesktop.cn/api/downloads/mac'],
+    ['a look-alike suffix', 'https://evil-modelscope.cn/installer.dmg'],
+    ['a missing final URL', ''],
+  ] as const)('rejects a download that settles on %s', async (_label, finalUrl) => {
+    const directory = await temporaryDirectory()
+    await expectFailure(downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.0',
+      destinationPath: destinationPath(directory, 'darwin', '2.3.0'),
+      request: async () => chunkedResponse([dmgArtifact()], {}, finalUrl),
+    }), 'redirect-origin')
+    await expectNoPartialFiles(directory)
+  })
+
+  it('enforces an expected installer digest before completing the download', async () => {
+    const directory = await temporaryDirectory()
+    const artifact = dmgArtifact()
+    const digest = createHash('sha256').update(artifact).digest('hex')
+    const valid = await downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.1',
+      destinationPath: destinationPath(directory, 'darwin', '2.3.1'),
+      request: async () => chunkedResponse([artifact]),
+      expectedSha256: digest,
+    })
+    expect(await readFile(valid)).toEqual(Buffer.from(artifact))
+
+    const otherDirectory = await temporaryDirectory()
+    await expectFailure(downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.2',
+      destinationPath: destinationPath(otherDirectory, 'darwin', '2.3.2'),
+      request: async () => chunkedResponse([artifact]),
+      expectedSha256: 'a'.repeat(64),
+    }), 'invalid-artifact')
+    await expectNoPartialFiles(otherDirectory)
   })
 
   it('accepts canonical stable SemVer build metadata in the private artifact path', async () => {
@@ -210,12 +273,14 @@ describe('desktop update installer download', () => {
     let requestSignal: AbortSignal | null | undefined
     const request: UpdateArtifactRequest = async (_url, init) => {
       requestSignal = init.signal
-      return new Response(new ReadableStream<Uint8Array>({
+      const response = new Response(new ReadableStream<Uint8Array>({
         pull(stream) {
           stream.enqueue(dmgArtifact().subarray(0, 128))
           controller.abort(new DOMException('stop', 'AbortError'))
         },
       }))
+      Object.defineProperty(response, 'url', { value: 'https://www.dshdesktop.cn/api/downloads/mac' })
+      return response
     }
 
     await expectFailure(downloadDesktopUpdate({

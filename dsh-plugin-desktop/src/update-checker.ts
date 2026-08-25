@@ -43,6 +43,12 @@ export type UpdateCheckResult = {
   readonly currentVersion: string
   /** Canonical latest stable version returned by the service. */
   readonly latestVersion: string
+  /**
+   * Optional per-platform hex SHA-256 digests of the published installers.
+   * The service does not publish them yet; when it does, the download path
+   * enforces them as a hard integrity gate before execution.
+   */
+  readonly installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>
 }
 
 const SEMVER_PATTERN =
@@ -121,10 +127,12 @@ export async function checkForStableUpdate(
 
   const latest = parseVersionResponse(body)
   if (latest === null) return null
+  const digests = parseInstallerDigestResponse(body)
   return {
     status: compareParsedSemVer(latest, current) > 0 ? 'update-available' : 'up-to-date',
     currentVersion: current.version,
     latestVersion: latest.version,
+    ...(digests === undefined ? {} : { installerSha256: digests }),
   }
 }
 
@@ -171,6 +179,27 @@ function parseVersionResponse(body: string): ParsedSemVer | null {
   }
   if (!isRecord(value) || typeof value.version !== 'string') return null
   return parseCanonicalStableVersion(value.version)
+}
+
+/**
+ * Extract optional per-platform installer digests from the version response:
+ * `{ "version": "2.0.2", "sha256": { "windows": "<hex>", "mac": "<hex>" } }`.
+ * Absent, partial, or malformed fields simply leave the digest gate unset.
+ */
+function parseInstallerDigestResponse(body: string): UpdateCheckResult['installerSha256'] | undefined {
+  let value: unknown
+  try {
+    value = JSON.parse(body)
+  } catch {
+    return undefined
+  }
+  if (!isRecord(value) || !isRecord(value.sha256)) return undefined
+  const digests: Partial<Record<'win32' | 'darwin', string>> = {}
+  const windows = value.sha256.windows
+  const mac = value.sha256.mac
+  if (typeof windows === 'string' && /^[0-9a-f]{64}$/u.test(windows)) digests.win32 = windows
+  if (typeof mac === 'string' && /^[0-9a-f]{64}$/u.test(mac)) digests.darwin = mac
+  return Object.keys(digests).length > 0 ? digests : undefined
 }
 
 function parseCanonicalStableVersion(input: string): ParsedSemVer | null {
