@@ -45,8 +45,9 @@ export type UpdateCheckResult = {
   readonly latestVersion: string
   /**
    * Optional per-platform hex SHA-256 digests of the published installers.
-   * The service does not publish them yet; when it does, the download path
-   * enforces them as a hard integrity gate before execution.
+   * Whenever the service publishes them, the download path enforces them as
+   * a hard integrity gate before execution; they are optional only because
+   * the version endpoint does not publish digests yet.
    */
   readonly installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>
 }

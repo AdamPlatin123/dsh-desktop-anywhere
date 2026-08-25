@@ -63,9 +63,9 @@ export interface DownloadDesktopUpdateOptions {
   /** Optional cancellation signal owned by the update coordinator. */
   readonly signal?: AbortSignal
   /**
-   * Hex SHA-256 the downloaded installer must match. Optional so the current
-   * version endpoint can adopt it without a client protocol break; when the
-   * service publishes digests this becomes a hard gate in front of execution.
+   * Hex SHA-256 the downloaded installer must match. Passing this turns the
+   * digest check into a hard gate in front of execution; it is optional only
+   * because the version endpoint does not publish digests yet.
    */
   readonly expectedSha256?: string
 }

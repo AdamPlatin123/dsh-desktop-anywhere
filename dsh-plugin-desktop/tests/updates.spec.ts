@@ -238,7 +238,7 @@ describe('desktop update Host plugin', () => {
 
     const pending = harness.tray.invoke()
     await vi.waitFor(() => { expect(harness.downloadAndOpen).toHaveBeenCalledOnce() })
-    const [version, signal, installerSha256] = harness.downloadAndOpen.mock.calls[0] as [
+    const [version, , installerSha256] = harness.downloadAndOpen.mock.calls[0] as [
       string,
       AbortSignal,
       Readonly<Partial<Record<'win32' | 'darwin', string>>> | undefined,
