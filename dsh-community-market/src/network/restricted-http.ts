@@ -4,8 +4,6 @@ import https from 'node:https'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import type { CatalogHttpClient, CatalogHttpRequestPolicy, CatalogHttpResponse } from '../contracts/types.js'
 import {
-  SYNTHETIC_PROXY_NETWORK,
-  SYNTHETIC_PROXY_PREFIX,
   createBlockedAddresses,
   createSyntheticProxyAddresses,
 } from './blocked-subnets.js'
@@ -293,19 +291,24 @@ interface CachedCatalogResponse {
  * one delegate request; their object graph is collected once the last waiter
  * settles if they were already removed.
  */
+function isCachedEntryFresh(
+  entry: CachedCatalogResponse,
+  now: () => number,
+  ttlMs: number,
+): boolean {
+  return entry.response !== undefined && entry.savedAt !== undefined && now() - entry.savedAt < ttlMs
+}
+
 function evictCachedEntries(
   cache: Map<string, CachedCatalogResponse>,
   maxEntries: number,
   now: () => number,
   ttlMs: number,
 ): void {
+  if (cache.size <= maxEntries) return
   for (const [key, entry] of cache) {
     if (entry.inFlight !== undefined) continue
-    if (entry.response === undefined) {
-      cache.delete(key)
-    } else if (entry.savedAt !== undefined && now() - entry.savedAt >= ttlMs) {
-      cache.delete(key)
-    }
+    if (entry.response === undefined || !isCachedEntryFresh(entry, now, ttlMs)) cache.delete(key)
   }
   for (const [key, entry] of cache) {
     if (cache.size <= maxEntries) return
@@ -361,13 +364,14 @@ export function createCachedCatalogHttpClient(
       if (entry === undefined || policy.cacheMode === 'reload') {
         entry = { waiters: 0 }
         cache.set(key, entry)
-      } else if (entry.response !== undefined && entry.savedAt !== undefined && now() - entry.savedAt < ttlMs) {
+      } else if (isCachedEntryFresh(entry, now, ttlMs)) {
         // Refresh insertion order so eviction removes the least recently used entry.
         cache.delete(key)
         cache.set(key, entry)
       }
-      if (entry.response !== undefined && entry.savedAt !== undefined && now() - entry.savedAt < ttlMs) {
-        return entry.response
+      const cachedResponse = isCachedEntryFresh(entry, now, ttlMs) ? entry.response : undefined
+      if (cachedResponse !== undefined) {
+        return cachedResponse
       }
       if (entry.inFlight === undefined) {
         const inFlightController = new AbortController()
@@ -383,6 +387,13 @@ export function createCachedCatalogHttpClient(
             if (entry.inFlight !== request || inFlightController.signal.aborted) return
             entry.response = response
             entry.savedAt = now()
+            // A URL that just paid a network refetch is recently used; move
+            // it to the back of the LRU order unless eviction already
+            // removed it (re-inserting would resurrect a dead entry).
+            if (cache.get(key) === entry) {
+              cache.delete(key)
+              cache.set(key, entry)
+            }
           },
           () => {},
         ).finally(() => {

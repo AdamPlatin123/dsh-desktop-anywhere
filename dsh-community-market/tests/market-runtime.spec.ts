@@ -10,10 +10,12 @@ import { MemoryCatalogSourceStore, SettingsCatalogSourceStore } from '../src/cat
 import type { SettingsScope } from '@deepseek-ai/dsh-settings'
 import type {
   CatalogHttpClient,
+  CatalogHttpResponse,
   CatalogProviderPage,
   CatalogSourceManifest,
   LocalSourceRecord,
 } from '../src/contracts/index.js'
+import type { CatalogHttpRequestPolicy } from '../src/contracts/types.js'
 import type { MarketSettingsDocument } from '../src/catalog/source-store.js'
 import {
   createMarketSourceMutator,
@@ -1733,6 +1735,55 @@ describe('restricted HTTP boundary', () => {
     await client.getJson('https://provider.example/d', new AbortController().signal)
     await client.getJson('https://provider.example/b', new AbortController().signal)
     expect(seen.filter(url => url === 'https://provider.example/b')).toHaveLength(3)
+  })
+
+  it('refreshes the LRU order for an entry refetched after expiry', async () => {
+    let now = 1_000
+    const seen: string[] = []
+    const delegate: CatalogHttpClient = {
+      getJson: vi.fn(async (url: string) => {
+        seen.push(url)
+        return { value: { url }, finalUrl: url }
+      }),
+    }
+    const client = createCachedCatalogHttpClient(delegate, { ttlMs: 300_000, now: () => now, maxEntries: 2 })
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+
+    // "a" expires and is refetched; the refetch must move it to the back of
+    // the LRU order, so a later insertion evicts "b" instead of "a".
+    now += 300_001
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    expect(seen).toHaveLength(3)
+    await client.getJson('https://provider.example/c', new AbortController().signal)
+    expect(seen).toHaveLength(4)
+
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    expect(seen).toHaveLength(4)
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+    expect(seen).toHaveLength(5)
+  })
+
+  it('keeps an in-flight entry collapsing concurrent reads under eviction pressure', async () => {
+    let now = 1_000
+    const seen: string[] = []
+    let releaseA!: (value: { value: object; finalUrl: string }) => void
+    const delegate: CatalogHttpClient = {
+      getJson: vi.fn((url: string, _signal: AbortSignal, _policy?: CatalogHttpRequestPolicy): Promise<CatalogHttpResponse> => {
+        seen.push(url)
+        if (url.endsWith('/a')) return new Promise<CatalogHttpResponse>(resolve => { releaseA = resolve })
+        return Promise.resolve({ value: { url }, finalUrl: url })
+      }),
+    }
+    const client = createCachedCatalogHttpClient(delegate, { ttlMs: 300_000, now: () => now, maxEntries: 1 })
+    const first = client.getJson('https://provider.example/a', new AbortController().signal)
+    const second = client.getJson('https://provider.example/a', new AbortController().signal)
+    // Triggers eviction while "a" is still in flight; "a" must survive it.
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+    releaseA({ value: { url: 'https://provider.example/a' }, finalUrl: 'https://provider.example/a' })
+    await Promise.all([first, second])
+    expect(seen.filter(url => url.endsWith('/a'))).toHaveLength(1)
+    expect(seen.filter(url => url.endsWith('/b'))).toHaveLength(1)
   })
 
   it('aborts a shared fixed-catalog request after its last waiter leaves', async () => {

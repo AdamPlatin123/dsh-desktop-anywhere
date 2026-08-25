@@ -4,8 +4,6 @@ import https from 'node:https'
 import { isIP } from 'node:net'
 import type { MarketMediaCandidate } from './types.js'
 import {
-  SYNTHETIC_PROXY_NETWORK,
-  SYNTHETIC_PROXY_PREFIX,
   createBlockedAddresses,
   createSyntheticProxyAddresses,
 } from '../network/blocked-subnets.js'
