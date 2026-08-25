@@ -236,8 +236,14 @@ function ensureDirectory(path: string): void {
   if (CHECK_POSIX_MODE && (item.mode & 0o777) !== DIRECTORY_MODE) chmodSync(path, DIRECTORY_MODE)
 }
 
-function writeDurable(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
-  ensureDirectory(dirname(path))
+/**
+ * Atomic durable file write for profile-owned configuration: create a fresh
+ * temporary with `wx`, fsync, then rename over the target. The rename replaces
+ * the directory entry instead of following a pre-existing symlink at the
+ * target path, and a failure never leaves a truncated file behind. Callers
+ * own directory creation and permissions.
+ */
+export function writeDurableFile(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
   let fd: number | undefined
   try {
@@ -255,6 +261,11 @@ function writeDurable(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
     if (fd !== undefined) closeSync(fd)
     try { unlinkSync(temporary) } catch { /* already renamed */ }
   }
+}
+
+function writeDurable(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
+  ensureDirectory(dirname(path))
+  writeDurableFile(path, bytes, mode)
 }
 
 function readJson(path: string): unknown {

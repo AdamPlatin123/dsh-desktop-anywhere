@@ -1,10 +1,11 @@
 /** Compatibility profile composition over the official Web bundle and user plugins. */
 
 import { createRequire } from 'node:module'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { writeDurableFile } from './profile-checkpoint.ts'
 import { evaluate, isJsExpr, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import {
@@ -369,7 +370,7 @@ function parseProfileYaml(path: string): ParsedProfileYaml {
 function reconcileProfilePnpmWorkspace(profileDir: string): boolean {
   const path = join(profileDir, 'pnpm-workspace.yaml')
   if (!existsSync(path)) {
-    writeFileSync(path, `packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n`)
+    writeDurableFile(path, Buffer.from(`packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: false\n`, 'utf8'), 0o666)
     return true
   }
   const { document } = parseProfileYaml(path)
@@ -386,7 +387,7 @@ function reconcileProfilePnpmWorkspace(profileDir: string): boolean {
     document.set('autoInstallPeers', false)
     changed = true
   }
-  if (changed) writeFileSync(path, document.toString())
+  if (changed) writeDurableFile(path, Buffer.from(document.toString(), 'utf8'), 0o666)
   return changed
 }
 
@@ -840,7 +841,7 @@ export function prepareDesktopProfile(
   const profile = loadedProfile.profile
   const rootConfig = join(profileDir, DESKTOP_PROFILE_ROOT)
   const bareModuleBaseUrl = pathToFileURL(join(profile.dir, 'package.json')).href
-  writeFileSync(rootConfig, '[]\n')
+  writeDurableFile(rootConfig, Buffer.from('[]\n', 'utf8'), 0o666)
 
   const desktopPatches = loadOverlayPatches(BIN_NAME, DESKTOP_PATCH_PATH)
   const bundlePatches: PatchOptions[] = []
