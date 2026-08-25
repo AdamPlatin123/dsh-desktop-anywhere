@@ -366,7 +366,10 @@ export class DesktopProfileCheckpoint {
     this.recoverOrphanedSlots()
     return DESKTOP_PROFILE_CHECKPOINT_SLOT_IDS.map(slotId => {
       const directory = this.slotDirectory(slotId)
-      const snapshot = this.readSnapshot(directory, false)
+      // A slot whose snapshot no longer validates (torn capture, disk-level
+      // corruption) is reported as empty: the recovery page stays browsable,
+      // rotation keeps writing, and the next healthy startup overwrites it.
+      const snapshot = this.tryReadSnapshot(directory, false)
       return snapshot === undefined
         ? { slotId, snapshotExists: false, snapshotDirectory: directory }
         : (() => {
@@ -417,6 +420,14 @@ export class DesktopProfileCheckpoint {
           const destination = filePath(staging, name)
           ensureDirectory(dirname(destination))
           writeDurable(destination, readFileSync(targetPath(this.profileDir, this.homeDir, name)))
+          // A concurrent package operation can rewrite the profile between
+          // the hash measurement and this copy. Verify the staged bytes
+          // against the measured image so a torn capture never lands in a
+          // slot; the failure only skips this checkpoint rotation.
+          const staged = readFileSync(destination)
+          if (staged.byteLength !== image.size || hash(staged) !== image.sha256) {
+            throw new Error(`profile checkpoint capture raced with a profile change: ${name}`)
+          }
         }
       }
       const manifest: ProfileCheckpointManifestV3 = {
@@ -622,6 +633,15 @@ export class DesktopProfileCheckpoint {
     } catch (cause) {
       if (isENOENT(cause)) return undefined
       throw cause
+    }
+  }
+
+  /** Read a slot snapshot, treating an unreadable or corrupted one as absent. */
+  private tryReadSnapshot(directory: string, requireComplete: boolean): LoadedSnapshot | undefined {
+    try {
+      return this.readSnapshot(directory, requireComplete)
+    } catch {
+      return undefined
     }
   }
 
