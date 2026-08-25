@@ -179,6 +179,16 @@ function fail(message: string): never {
   throw new Error(`${BIN_NAME}: ${message}`)
 }
 
+/** errno codes that make a slot unreadable right now without corrupting it. */
+const TRANSIENT_SNAPSHOT_IO_CODES = new Set(['EACCES', 'EBUSY', 'EMFILE', 'EIO', 'EPERM', 'ENFILE'])
+
+function isTransientSnapshotIoFailure(cause: unknown): boolean {
+  return cause !== null
+    && typeof cause === 'object'
+    && typeof (cause as NodeJS.ErrnoException).code === 'string'
+    && TRANSIENT_SNAPSHOT_IO_CODES.has((cause as NodeJS.ErrnoException).code as string)
+}
+
 function assertAbsolute(label: string, value: string): string {
   if (typeof value !== 'string' || value.length === 0 || !isAbsolute(value) || value.includes('\0')) {
     fail(`${label} must be an absolute path without NUL`)
@@ -625,11 +635,16 @@ export class DesktopProfileCheckpoint {
     }
   }
 
-  /** Read a slot snapshot, treating an unreadable or corrupted one as absent. */
+  /** Read a slot snapshot, treating a structurally corrupted one as absent. */
   private tryReadSnapshot(directory: string, requireComplete: boolean): LoadedSnapshot | undefined {
     try {
       return this.readSnapshot(directory, requireComplete)
     } catch (cause) {
+      // Transient I/O failures (antivirus or indexer holding the file,
+      // EACCES/EBUSY/EMFILE/EIO/EPERM) must not mark a healthy slot as
+      // empty: captureHealthy would then overwrite and destroy it. Only a
+      // failed structural validation self-heals as an empty slot.
+      if (isTransientSnapshotIoFailure(cause)) throw cause
       // The slot will be reported as empty and overwritten by the next
       // healthy capture; surface why so silent corruption stays diagnosable.
       this.logError?.(

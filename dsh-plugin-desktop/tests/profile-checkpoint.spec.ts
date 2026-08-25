@@ -161,6 +161,29 @@ describe('Desktop profile health checkpoints', () => {
     expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
   })
 
+  it('propagates transient I/O failures instead of treating the slot as empty', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const slot = target.checkpoint.listSlots()[0]!
+    const proto = DesktopProfileCheckpoint.prototype as unknown as {
+      readSnapshot: (directory: string, requireComplete: boolean) => unknown
+    }
+    const spy = vi.spyOn(proto, 'readSnapshot').mockImplementation(function (this: DesktopProfileCheckpoint) {
+      const cause = new Error('file locked by another process') as NodeJS.ErrnoException
+      cause.code = 'EBUSY'
+      throw cause
+    })
+    try {
+      // A locked manifest must surface, not read as an empty slot that the
+      // next healthy capture would overwrite and destroy.
+      expect(() => target.checkpoint.listSlots()).toThrow('file locked by another process')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(slot.snapshotExists).toBe(true)
+    expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
+  })
+
   it('restores an explicitly selected slot and skips exactly the next healthy write', () => {
     let now = Date.parse('2026-08-25T00:00:00.000Z')
     const target = fixture({ now: () => now })
