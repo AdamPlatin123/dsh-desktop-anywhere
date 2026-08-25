@@ -110,13 +110,30 @@ const MATERIALIZER_ENV_KEYS = [
 ] as const
 
 /**
- * Environment keys that inject modules or resolution paths into a Node
- * runtime. The child runs the Electron binary with ELECTRON_RUN_AS_NODE=1,
- * so an inherited NODE_OPTIONS (--require, --import) or NODE_PATH would
- * execute attacker-chosen code inside the install subprocess. The shared
- * scrubbedParentEnv does not strip them yet; removed here until it does.
+ * Environment keys that inject code, resolution paths, trust anchors, or
+ * package sources into the install subprocess. The child runs the Electron
+ * binary with ELECTRON_RUN_AS_NODE=1, so NODE_OPTIONS/NODE_PATH would load
+ * attacker-chosen modules; the LD_ and DYLD_ families hijack native library
+ * loading; NODE_EXTRA_CA_CERTS and the SSL_CERT_ pair retarget TLS trust;
+ * the npm_config_ entries redirect dependency resolution. The shared
+ * scrubbedParentEnv does not strip these yet; removed here until it does.
  */
-const MATERIALIZER_STRIPPED_ENV_KEYS = new Set(['NODE_OPTIONS', 'NODE_PATH'].map(key => key.toUpperCase()))
+const MATERIALIZER_STRIPPED_ENV_KEYS = new Set([
+  'NODE_OPTIONS',
+  'NODE_PATH',
+  'NODE_EXTRA_CA_CERTS',
+  'LD_PRELOAD',
+  'LD_LIBRARY_PATH',
+  'DYLD_INSERT_LIBRARIES',
+  'DYLD_LIBRARY_PATH',
+  'DYLD_FRAMEWORK_PATH',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+  'npm_config_registry',
+  'npm_config_userconfig',
+  'npm_config_cafile',
+  'npm_config_strict_ssl',
+].map(key => key.toUpperCase()))
 
 /**
  * Start from the credential-scrubbed parent environment, like the pnpm

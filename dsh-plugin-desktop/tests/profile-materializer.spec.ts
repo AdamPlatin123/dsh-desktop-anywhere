@@ -122,6 +122,10 @@ describe('profile materializer', () => {
     process.env.DSH_INTERNAL_NOTE = 'internal'
     process.env.NODE_OPTIONS = '--require=/tmp/payload.js'
     process.env.NODE_PATH = '/tmp/rogue-modules'
+    process.env.LD_PRELOAD = '/tmp/rogue.so'
+    process.env.DYLD_INSERT_LIBRARIES = '/tmp/rogue.dylib'
+    process.env.NODE_EXTRA_CA_CERTS = '/tmp/rogue-ca.pem'
+    process.env.npm_config_registry = 'https://evil-registry.example'
     const child = fakeChild()
     let spawnOptions: SpawnOptions | undefined
     const spawn = vi.fn((_command: string, _args: readonly string[], selectedOptions: SpawnOptions) => {
@@ -141,12 +145,20 @@ describe('profile materializer', () => {
       else process.env.NODE_OPTIONS = savedNodeOptions
       if (savedNodePath === undefined) delete process.env.NODE_PATH
       else process.env.NODE_PATH = savedNodePath
+      delete process.env.LD_PRELOAD
+      delete process.env.DYLD_INSERT_LIBRARIES
+      delete process.env.NODE_EXTRA_CA_CERTS
+      delete process.env.npm_config_registry
     }
     const environment = spawnOptions?.env as NodeJS.ProcessEnv
     expect(environment.DESKTOP_TEST_MARKET_TOKEN).toBeUndefined()
     expect(environment.DSH_INTERNAL_NOTE).toBeUndefined()
     expect(environment.NODE_OPTIONS).toBeUndefined()
     expect(environment.NODE_PATH).toBeUndefined()
+    expect(environment.LD_PRELOAD).toBeUndefined()
+    expect(environment.DYLD_INSERT_LIBRARIES).toBeUndefined()
+    expect(environment.NODE_EXTRA_CA_CERTS).toBeUndefined()
+    expect(environment.npm_config_registry).toBeUndefined()
     expect(environment.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(environment.NODE).toBe('/private/node-bin/node')
   })
