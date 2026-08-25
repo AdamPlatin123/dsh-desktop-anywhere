@@ -1672,6 +1672,39 @@ describe('restricted HTTP boundary', () => {
     await expect(refreshed).resolves.toMatchObject({ value: { packages: [] } })
   })
 
+  it('bounds the cached-catalog entry count and evicts the least recently used entry', async () => {
+    let now = 1_000
+    const seen: string[] = []
+    const delegate: CatalogHttpClient = {
+      getJson: vi.fn(async (url: string) => {
+        seen.push(url)
+        return { value: { url }, finalUrl: url }
+      }),
+    }
+    const client = createCachedCatalogHttpClient(delegate, { ttlMs: 300_000, now: () => now, maxEntries: 2 })
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+    // Touch "a" so "b" becomes the least recently used entry.
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    await client.getJson('https://provider.example/c', new AbortController().signal)
+    expect(seen).toEqual(['https://provider.example/a', 'https://provider.example/b', 'https://provider.example/c'])
+
+    // "b" was evicted; refetching it must hit the delegate again, while "a"
+    // and "c" stay served from the cache without new requests.
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    await client.getJson('https://provider.example/c', new AbortController().signal)
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+    expect(seen).toHaveLength(4)
+
+    // Expired entries are swept even when the cache is below the entry cap:
+    // inserting "d" sweeps the now-expired "c" and "b", so reading "b" again
+    // must hit the delegate a third time.
+    now += 300_001
+    await client.getJson('https://provider.example/d', new AbortController().signal)
+    await client.getJson('https://provider.example/b', new AbortController().signal)
+    expect(seen.filter(url => url === 'https://provider.example/b')).toHaveLength(3)
+  })
+
   it('aborts a shared fixed-catalog request after its last waiter leaves', async () => {
     let delegateSignal: AbortSignal | undefined
     const delegate: CatalogHttpClient = {
