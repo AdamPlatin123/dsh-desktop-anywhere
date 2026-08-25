@@ -617,16 +617,18 @@ export class DefaultCatalogService implements CatalogService {
 
   /**
    * Drop the least recently inserted scan indexes until the cache is back
-   * within bounds. Evicting a key also drops its generation counter and, when
-   * no scan is active, its gate and controller set: a queued scan for that key
-   * re-validates its generation before running, so stale bookkeeping never
-   * lets a superseded scan complete.
+   * within bounds. Generation counters are kept: they are one number per
+   * (source, locale) key, and deleting one that a queued or running scan
+   * still compares against would make that scan fail its re-validation with
+   * a misleading "source changed" error. Idle gate and controller sets are
+   * reclaimed; gates for keys with active scans are left alone because the
+   * scan flow always removes the cache entry before entering its gate, so an
+   * evicted key cannot have an active scan.
    */
   private evictCatalogScanCache(): void {
     for (const key of this.catalogScanCache.keys()) {
       if (this.catalogScanCache.size <= this.maxScanCacheEntries) return
       this.catalogScanCache.delete(key)
-      this.catalogScanGenerations.delete(key)
       const controllers = this.catalogScanControllers.get(key)
       if (controllers === undefined || controllers.size === 0) {
         this.catalogScanControllers.delete(key)
