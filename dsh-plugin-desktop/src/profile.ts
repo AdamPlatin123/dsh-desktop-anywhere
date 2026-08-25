@@ -841,7 +841,13 @@ export function prepareDesktopProfile(
   const profile = loadedProfile.profile
   const rootConfig = join(profileDir, DESKTOP_PROFILE_ROOT)
   const bareModuleBaseUrl = pathToFileURL(join(profile.dir, 'package.json')).href
-  writeDurableFile(rootConfig, Buffer.from('[]\n', 'utf8'), 0o666)
+  // The root config is rewritten on every startup; when it already holds
+  // the expected reset content, skip the write entirely — each rename
+  // replaces the file inode, which both resets manual permission changes
+  // and briefly opens a share-conflict window on Windows.
+  if (!existsSync(rootConfig) || readFileSync(rootConfig, 'utf8') !== '[]\n') {
+    writeDurableFile(rootConfig, Buffer.from('[]\n', 'utf8'), 0o666)
+  }
 
   const desktopPatches = loadOverlayPatches(BIN_NAME, DESKTOP_PATCH_PATH)
   const bundlePatches: PatchOptions[] = []
