@@ -14,6 +14,7 @@ import {
   resolveDesktopUpdateArtifact,
   type DesktopDownloadPlatform,
   type UpdateArtifactRequest,
+  type UpdateArtifactResponse,
 } from '../src/update-download.ts'
 
 const temporaryRoots: string[] = []
@@ -45,8 +46,8 @@ function windowsArtifact(): Uint8Array {
 function chunkedResponse(
   chunks: readonly Uint8Array[],
   headers: HeadersInit = {},
-  url: string = 'https://www.dshdesktop.cn/api/downloads/mac',
-): Response {
+  finalUrl: string = 'https://www.dshdesktop.cn/api/downloads/mac',
+): UpdateArtifactResponse {
   let index = 0
   const response = new Response(new ReadableStream<Uint8Array>({
     pull(controller) {
@@ -56,8 +57,9 @@ function chunkedResponse(
       else controller.enqueue(chunk)
     },
   }), { status: 200, headers })
-  Object.defineProperty(response, 'url', { value: url })
-  return response
+  // The settled URL is reported explicitly: Electron net.fetch Responses
+  // carry an empty url, so the gate must never read it off the Response.
+  return { response, finalUrl }
 }
 
 async function expectFailure(
@@ -157,6 +159,46 @@ describe('desktop update installer download', () => {
       destinationPath: destinationPath(directory, 'darwin', '2.3.0'),
       request: async () => chunkedResponse([dmgArtifact()], {}, finalUrl),
     }), 'redirect-origin')
+    await expectNoPartialFiles(directory)
+  })
+
+  it('cancels the response body when the origin gate rejects the settled URL', async () => {
+    const directory = await temporaryDirectory()
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(stream) { stream.enqueue(dmgArtifact()) },
+      cancel() { cancelled = true },
+    })
+    await expectFailure(downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.3.0',
+      destinationPath: destinationPath(directory, 'darwin', '2.3.0'),
+      request: async () => ({
+        response: new Response(body, { status: 200 }),
+        finalUrl: 'https://attacker.example/installer.dmg',
+      }),
+    }), 'redirect-origin')
+    expect(cancelled).toBe(true)
+    await expectNoPartialFiles(directory)
+  })
+
+  it('cancels the response body when the HTTP status is unsuccessful', async () => {
+    const directory = await temporaryDirectory()
+    let cancelled = false
+    const body = new ReadableStream<Uint8Array>({
+      pull(stream) { stream.enqueue(Buffer.from('service unavailable')) },
+      cancel() { cancelled = true },
+    })
+    await expectFailure(downloadDesktopUpdate({
+      platform: 'darwin',
+      version: '2.4.1',
+      destinationPath: destinationPath(directory, 'darwin', '2.4.1'),
+      request: async () => ({
+        response: new Response(body, { status: 503 }),
+        finalUrl: 'https://www.dshdesktop.cn/api/downloads/mac',
+      }),
+    }), 'http-status')
+    expect(cancelled).toBe(true)
     await expectNoPartialFiles(directory)
   })
 
@@ -265,8 +307,14 @@ describe('desktop update installer download', () => {
   })
 
   it.each([
-    ['an unsuccessful response', async () => new Response(null, { status: 503 }), 'http-status'],
-    ['a missing response body', async () => new Response(null, { status: 200 }), 'empty-body'],
+    ['an unsuccessful response', async (): Promise<UpdateArtifactResponse> => ({
+      response: new Response(null, { status: 503 }),
+      finalUrl: 'https://www.dshdesktop.cn/api/downloads/mac',
+    }), 'http-status'],
+    ['a missing response body', async (): Promise<UpdateArtifactResponse> => ({
+      response: new Response(null, { status: 200 }),
+      finalUrl: 'https://www.dshdesktop.cn/api/downloads/mac',
+    }), 'empty-body'],
     ['a zero-byte response body', async () => chunkedResponse([]), 'empty-body'],
   ] as const)('rejects %s without leaving a partial file', async (_label, request, code) => {
     const directory = await temporaryDirectory()
@@ -305,8 +353,7 @@ describe('desktop update installer download', () => {
           controller.abort(new DOMException('stop', 'AbortError'))
         },
       }))
-      Object.defineProperty(response, 'url', { value: 'https://www.dshdesktop.cn/api/downloads/mac' })
-      return response
+      return { response, finalUrl: 'https://www.dshdesktop.cn/api/downloads/mac' }
     }
 
     await expectFailure(downloadDesktopUpdate({
@@ -359,7 +406,7 @@ describe('desktop update installer download', () => {
 
   it('rejects a relative destination path before requesting', async () => {
     let requested = false
-    const request = async (): Promise<Response> => {
+    const request = async (): Promise<UpdateArtifactResponse> => {
       requested = true
       return chunkedResponse([dmgArtifact()])
     }
@@ -379,7 +426,7 @@ describe('desktop update installer download', () => {
     temporaryRoots.push(linked)
     await symlink(directory, linked, process.platform === 'win32' ? 'junction' : 'dir')
     let requested = false
-    const request = async (): Promise<Response> => {
+    const request = async (): Promise<UpdateArtifactResponse> => {
       requested = true
       return chunkedResponse([dmgArtifact()])
     }
