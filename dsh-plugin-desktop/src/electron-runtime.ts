@@ -11,6 +11,7 @@ import {
 import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { desktopTerminalStateDirectory, openDesktopTerminal } from './desktop-terminal.ts'
 import { showDesktopMessageBox } from './desktop-dialog-window.ts'
@@ -52,6 +53,7 @@ import {
   recordDesktopUpdateArtifact,
   resolveDesktopUpdateArtifact,
   type DesktopUpdateArtifact,
+  type UpdateArtifactResponse,
 } from './update-download.ts'
 import type { UpdateCheckResult } from './update-checker.ts'
 import {
@@ -102,6 +104,62 @@ const PRODUCT_VERSION = desktopProductVersion()
 
 /** Main-process deadline for one Renderer generation to settle its client Loader. */
 export const RENDERER_BOOT_TIMEOUT_MS = 30_000
+
+/**
+ * Download-request adapter over Electron `net.request`. `net.fetch` cannot
+ * back the download origin gate: its Response carries an empty `url` (a
+ * documented Electron limitation), so redirects are followed here and the
+ * settled URL is reported alongside the response for the gate to validate.
+ */
+export function requestDesktopArtifact(url: string, init: RequestInit): Promise<UpdateArtifactResponse> {
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url, method: 'GET', redirect: 'manual' })
+    let finalUrl = url
+    let settled = false
+    const headers = new Headers(init.headers)
+    // Approximates the fetch `cache: 'no-store` intent over the Chromium net stack.
+    headers.set('cache-control', 'no-cache')
+    headers.forEach((value, key) => { request.setHeader(key, value) })
+    request.on('redirect', (_status, _method, redirectUrl) => {
+      finalUrl = redirectUrl
+      request.followRedirect()
+    })
+    request.on('response', incoming => {
+      if (settled) return
+      settled = true
+      const status = incoming.statusCode
+      if (status === undefined) {
+        reject(new Error('dsh-plugin-desktop: the update download response carried no HTTP status.'))
+        return
+      }
+      const headers = new Headers()
+      for (const [key, value] of Object.entries(incoming.headers)) {
+        for (const item of Array.isArray(value) ? value : [value]) headers.append(key, item)
+      }
+      resolve({
+        response: new Response(Readable.toWeb(incoming as unknown as Readable) as unknown as ReadableStream<Uint8Array>, {
+          status,
+          headers,
+        }),
+        finalUrl,
+      })
+    })
+    request.on('error', cause => {
+      if (settled) return
+      settled = true
+      reject(cause)
+    })
+    const signal = init.signal
+    if (signal instanceof AbortSignal) {
+      if (signal.aborted) {
+        request.abort()
+        return
+      }
+      signal.addEventListener('abort', () => { request.abort() }, { once: true })
+    }
+    request.end()
+  })
+}
 
 /** Native adapter used by the DSH Desktop launcher and owned by its Cordis shell plugin. */
 export class ElectronDesktopRuntime implements DesktopRuntime {
@@ -655,7 +713,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       platform,
       version,
       destinationPath,
-      request: (url, init) => net.fetch(url, init),
+      request: requestDesktopArtifact,
       signal,
       ...(installerSha256?.[platform] === undefined ? {} : { expectedSha256: installerSha256[platform] }),
     })

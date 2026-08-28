@@ -29,8 +29,20 @@ export type UpdateDownloadErrorCode =
   | 'redirect-origin'
   | 'response-too-large'
 
-/** Fetch-compatible request boundary supplied by the Electron adapter or a test. */
-export type UpdateArtifactRequest = (url: string, init: RequestInit) => Promise<Response>
+/**
+ * One settled download response plus the URL the redirect chain landed on.
+ * Electron `net.fetch` cannot fill `Response.url` (a documented limitation:
+ * the value is always empty), so the transport adapter follows redirects
+ * itself and reports the settled URL here for the origin gate to validate.
+ */
+export interface UpdateArtifactResponse {
+  readonly response: Response
+  /** Absolute URL the transport settled on after following redirects. */
+  readonly finalUrl: string
+}
+
+/** Request boundary supplied by the Electron adapter or a test. */
+export type UpdateArtifactRequest = (url: string, init: RequestInit) => Promise<UpdateArtifactResponse>
 
 /**
  * Download targets the installer fetch may settle on: the fixed product
@@ -58,7 +70,7 @@ export interface DownloadDesktopUpdateOptions {
   readonly version: string
   /** Absolute installer path selected by the user. */
   readonly destinationPath: string
-  /** Request implementation, normally backed by Electron `net.fetch`. */
+  /** Redirect-following request adapter, normally backed by Electron `net.request`. */
   readonly request: UpdateArtifactRequest
   /** Optional cancellation signal owned by the update coordinator. */
   readonly signal?: AbortSignal
@@ -135,19 +147,23 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   throwIfAborted(options.signal)
 
   let response: Response
+  let finalUrl: string
   try {
-    response = await options.request(DESKTOP_DOWNLOAD_URLS[platform], {
+    const settled = await options.request(DESKTOP_DOWNLOAD_URLS[platform], {
       method: 'GET',
       cache: 'no-store',
       redirect: 'follow',
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
+    response = settled.response
+    finalUrl = settled.finalUrl
   } catch (cause) {
     if (options.signal?.aborted === true || isAbortFailure(cause)) throw aborted(cause)
     throw new UpdateDownloadError('network', 'The update installer could not be downloaded.', { cause })
   }
 
   if (response.status !== 200) {
+    await discardResponseBody(response)
     throw new UpdateDownloadError(
       'http-status',
       `The update download service returned HTTP ${String(response.status)}.`,
@@ -157,8 +173,13 @@ export async function downloadDesktopUpdate(options: DownloadDesktopUpdateOption
   if (response.body === null) {
     throw new UpdateDownloadError('empty-body', 'The update download service returned an empty body.')
   }
-  assertAllowedDownloadOrigin(response.url)
-  assertDeclaredSize(response)
+  try {
+    assertAllowedDownloadOrigin(finalUrl)
+    assertDeclaredSize(response)
+  } catch (cause) {
+    await discardResponseBody(response)
+    throw cause
+  }
 
   let failure: unknown
   try {
@@ -389,6 +410,11 @@ async function lstatOptional(filename: string): Promise<Awaited<ReturnType<typeo
   }
 }
 
+/** Release a rejected response body so its connection does not linger until GC. */
+async function discardResponseBody(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined)
+}
+
 function assertDeclaredSize(response: Response): void {
   const declared = response.headers.get('content-length')
   if (declared === null || !DECIMAL_BYTES.test(declared)) return
@@ -405,7 +431,7 @@ function assertAllowedDownloadOrigin(finalUrl: string): void {
   try {
     parsed = new URL(finalUrl)
   } catch {
-    throw new UpdateDownloadError('redirect-origin', 'The update download response had no usable URL.')
+    throw new UpdateDownloadError('redirect-origin', 'The update download transport reported no usable final URL.')
   }
   if (parsed.protocol !== 'https:') {
     throw new UpdateDownloadError('redirect-origin', 'The update download must settle on HTTPS.')
