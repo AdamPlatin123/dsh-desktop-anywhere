@@ -44,6 +44,7 @@ import {
   desktopLocaleFromLanguageTag,
   desktopRestartConfirmationCopy,
   desktopTrayLabel,
+  rendererRecoveryCopy,
 } from './tray-locale.ts'
 import {
   desktopUpdateFilename,
@@ -124,6 +125,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private readonly workspaceAdmission: ElectronWorkspaceAdmission
   private updateCleanupTask: Promise<void> | undefined
   private rendererHealthGate: DesktopRendererHealthGate | undefined
+  private rendererBootHealthy = false
   private profileCreateWindow: ProfileCreateWindow | undefined
   private restartRequest: Promise<void> | undefined
 
@@ -250,6 +252,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
         stopRendererBootMonitoring: () => { this.stopRendererBootMonitoring() },
         abortRendererBootMonitoring: cause => { this.rendererHealthGate?.stop(cause) },
         failRendererBoot: error => { this.failRendererBoot('renderer-failed', error) },
+        canRecoverRenderer: () => this.rendererBootHealthy,
+        rendererRecoveryCopy: () => rendererRecoveryCopy[this.currentLocale],
         logError: message => { this.logError(message) },
         mainWindowState: this.mainWindowState,
       })
@@ -415,9 +419,11 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   /** @inheritdoc */
   reportRendererBoot(report: RendererBootReport): void {
     this.rendererHealthGate?.report(report)
+    this.generation?.reportRendererRecovery(report)
   }
 
   private handleRendererBootVerdict(report: RendererBootReport): void {
+    this.rendererBootHealthy = report.status === 'healthy'
     if (report.status === 'failed') {
       const plugins = report.plugins.length === 0 ? 'Unknown client plugin' : report.plugins.join(', ')
       const error = report.error === undefined ? 'The client Loader did not provide an error message.' : report.error
@@ -507,6 +513,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   /** @inheritdoc */
   prepareToQuit(): void {
     this.quitting = true
+    this.generation?.stopRendererRecovery()
     this.stopRendererBootMonitoring()
   }
 
