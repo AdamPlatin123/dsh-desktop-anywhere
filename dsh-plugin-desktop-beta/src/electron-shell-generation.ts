@@ -11,7 +11,6 @@ import {
   Tray,
   type WebContents,
 } from 'electron'
-import { fileURLToPath } from 'node:url'
 import { CompatibilityShell, type CompatibilityShellActions } from './compatibility-shell.ts'
 import { formatDesktopExitCode } from './desktop-logger.ts'
 import { showDesktopMessageBox } from './desktop-dialog-window.ts'
@@ -227,8 +226,7 @@ export class ElectronShellGeneration {
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
-        partition: 'dsh-desktop-compatibility-chrome',
-        preload: fileURLToPath(new URL('./compatibility-preload.cjs', import.meta.url)),
+        partition: 'dsh-desktop-compatibility-host',
       } } : {}),
       ...(restoredBounds ?? {}),
     })
@@ -249,6 +247,7 @@ export class ElectronShellGeneration {
       throw cause
     }
     const renderer = this.compatibilityShell?.webContents ?? window.webContents
+    const chrome = this.compatibilityShell?.chromeWebContents ?? window.webContents
     this.renderer = renderer
 
     let stateWriteTimer: ReturnType<typeof setTimeout> | undefined
@@ -420,9 +419,9 @@ export class ElectronShellGeneration {
     renderer.on('render-process-gone', rendererGone)
     renderer.on('did-fail-load', loadFailed)
     if (isolated) {
-      window.webContents.on('before-input-event', handleZoomShortcut)
-      window.webContents.on('render-process-gone', rendererGone)
-      window.webContents.on('did-fail-load', loadFailed)
+      chrome.on('before-input-event', handleZoomShortcut)
+      chrome.on('render-process-gone', rendererGone)
+      chrome.on('did-fail-load', loadFailed)
     }
     renderer.setWindowOpenHandler(({ url }) => {
       try {
@@ -456,9 +455,9 @@ export class ElectronShellGeneration {
       renderer.off('render-process-gone', rendererGone)
       renderer.off('did-fail-load', loadFailed)
       if (isolated) {
-        window.webContents.off('before-input-event', handleZoomShortcut)
-        window.webContents.off('render-process-gone', rendererGone)
-        window.webContents.off('did-fail-load', loadFailed)
+        chrome.off('before-input-event', handleZoomShortcut)
+        chrome.off('render-process-gone', rendererGone)
+        chrome.off('did-fail-load', loadFailed)
       }
       removeRendererAccessHeader?.()
       removeRendererAccessHeader = undefined

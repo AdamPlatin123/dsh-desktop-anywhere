@@ -9,7 +9,6 @@ import {
   shell,
 } from 'electron'
 import { spawn } from 'node:child_process'
-import { en as desktopSettingsEn, zh as desktopSettingsZh } from './client/desktop-settings-locales.ts'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -261,13 +260,10 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
           restartToRecovery: () => this.requestRecoveryRestart(),
           reload: () => { this.reloadRenderer() },
           developerTools: () => { this.toggleDeveloperTools() },
-          statusMenu: () => this.contributedTrayItems('status'),
-          reportError: cause => {
-            this.logError(`dsh-plugin-desktop: chrome action failed: ${cause instanceof Error ? cause.message : String(cause)}`)
-            const copy = this.locale === 'zh' ? desktopSettingsZh : desktopSettingsEn
-            void this.showUpdateMessageBox({ type: 'error', message: copy.operationFailed }).catch((error: unknown) => {
-              this.logError(`dsh-plugin-desktop: failed to show chrome error: ${String(error)}`)
-            })
+          checkForUpdates: async () => {
+            const command = [...this.trayItems.values()].find(item => item.id === 'check-for-updates')
+            if (command === undefined || command.enabled?.() === false) throw new Error('Desktop update check is unavailable')
+            await command.invoke()
           },
         },
       })

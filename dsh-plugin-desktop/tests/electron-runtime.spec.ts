@@ -129,12 +129,19 @@ const electron = vi.hoisted(() => {
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
     ipc: { handle: vi.fn(), removeHandler: vi.fn() },
+    loadFile: vi.fn(async () => {}),
+    close: vi.fn(),
   }
   const contentViews: WebContentsView[] = []
   class WebContentsView {
-    readonly webContents = webContents
+    readonly webContents: typeof webContents | typeof chromeWebContents
     readonly setBounds = vi.fn()
-    constructor(readonly options: unknown) { contentViews.push(this) }
+    readonly setBackgroundColor = vi.fn()
+    constructor(readonly options: unknown) {
+      this.webContents = (options as { webPreferences: { partition: string } }).webPreferences.partition === 'dsh-desktop-compatibility-chrome'
+        ? chromeWebContents : webContents
+      contentViews.push(this)
+    }
   }
   const nativeTheme = {
     themeSource: 'system',
@@ -149,7 +156,7 @@ const electron = vi.hoisted(() => {
     accessibleTitle = ''
 
     constructor(options: unknown) {
-      this.webContents = (options as { webPreferences?: { partition?: string } }).webPreferences?.partition === 'dsh-desktop-compatibility-chrome'
+      this.webContents = (options as { webPreferences?: { partition?: string } }).webPreferences?.partition === 'dsh-desktop-compatibility-host'
         ? chromeWebContents : webContents
       browserWindowOptions.push(options)
       browserWindowThemeSources.push(nativeTheme.themeSource)
@@ -402,18 +409,17 @@ describe('Electron desktop runtime', () => {
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 16, y: 12 },
       webPreferences: {
-        preload: expect.stringMatching(/preload\.cjs$/),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
-        partition: 'dsh-desktop-compatibility-chrome',
+        partition: 'dsh-desktop-compatibility-host',
       },
     }))
     expect(options).not.toHaveProperty('autoHideMenuBar')
     expect(options).not.toHaveProperty('titleBarOverlay')
-    expect(electron.contentViews).toHaveLength(1)
-    expect(electron.contentViews[0]?.options).toEqual({ webPreferences: {
+    expect(electron.contentViews).toHaveLength(2)
+    expect(electron.contentViews[1]?.options).toEqual({ webPreferences: {
       preload: expect.stringMatching(/\/preload\.cjs$/),
       contextIsolation: true,
       nodeIntegration: false,
@@ -421,8 +427,8 @@ describe('Electron desktop runtime', () => {
       webSecurity: true,
       partition: 'persist:dsh-desktop-renderer',
     } })
-    expect(electron.contentViews[0]?.setBounds).toHaveBeenCalledWith({ x: 0, y: 36, width: 1280, height: 804 })
-    expect(electron.browserWindows[0]?.loadFile).toHaveBeenCalledWith(expect.stringMatching(/compatibility-chrome\.html$/))
+    expect(electron.contentViews[1]?.setBounds).toHaveBeenCalledWith({ x: 0, y: 36, width: 1280, height: 804 })
+    expect(electron.chromeWebContents.loadFile).toHaveBeenCalledWith(expect.stringMatching(/compatibility-chrome\.html$/))
     expect(electron.webContents.loadURL).toHaveBeenCalledWith(spec.url)
     expect(electron.browserWindows[0]?.webContents).not.toBe(electron.webContents)
     expect(electron.browserWindows[0]?.accessibleTitle).toBe('DeepSeek Harness Desktop')
@@ -864,7 +870,7 @@ describe('Electron desktop runtime', () => {
     const release = runtime.schedule(spec)
     await runtime.mountScheduled()
 
-    const gone = electron.browserWindows[0]?.webContents.on.mock.calls
+    const gone = electron.webContents.on.mock.calls
       .find(([event]) => event === 'render-process-gone')?.[1]
     expect(gone).toEqual(expect.any(Function))
     gone({}, { reason: 'crashed', exitCode: -1073741819 })
@@ -885,7 +891,7 @@ describe('Electron desktop runtime', () => {
     const rendererBoot = runtime.beginRendererBootMonitoring({ commitHealthy: async () => {} })
     await runtime.mountScheduled()
 
-    const gone = electron.browserWindows[0]?.webContents.on.mock.calls
+    const gone = electron.webContents.on.mock.calls
       .find(([event]) => event === 'render-process-gone')?.[1]
     expect(gone).toEqual(expect.any(Function))
     gone({}, { reason: 'crashed', exitCode: -1073741819 })
@@ -965,7 +971,7 @@ describe('Electron desktop runtime', () => {
     await vi.waitFor(() => { expect(electron.loadURL).toHaveBeenCalledOnce() })
 
     runtime.reportRendererBoot({ status: 'healthy' })
-    const gone = electron.browserWindows[0]?.webContents.on.mock.calls
+    const gone = electron.webContents.on.mock.calls
       .find(([event]) => event === 'render-process-gone')?.[1]
     gone({}, { reason: 'crashed', exitCode: 9 })
     finishLoad()
@@ -990,7 +996,7 @@ describe('Electron desktop runtime', () => {
     runtime.reportRendererBoot({ status: 'healthy' })
     await rendererBoot
 
-    const gone = electron.browserWindows[0]?.webContents.on.mock.calls
+    const gone = electron.webContents.on.mock.calls
       .find(([event]) => event === 'render-process-gone')?.[1]
     gone({}, { reason: 'crashed', exitCode: 9 })
 
