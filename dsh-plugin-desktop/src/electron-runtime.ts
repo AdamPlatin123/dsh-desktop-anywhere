@@ -206,7 +206,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       request: (url, init) => net.fetch(url, init),
       confirmDownload: (version, channel) => this.confirmUpdateDownload(version, channel),
       showManualCheckResult: result => this.showManualUpdateCheckResult(result),
-      downloadAndOpen: (version, signal, channel, installerSha256) => this.downloadAndOpenUpdate(version, signal, channel, installerSha256),
+      downloadAndOpen: (version, signal, installerSha256, channel) => this.downloadAndOpenUpdate(version, signal, installerSha256, channel),
       notify: notification => { this.showNotification(notification) },
     }
   }
@@ -713,8 +713,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
   private async downloadAndOpenUpdate(
     version: string,
     signal: AbortSignal,
-    channel: DesktopReleaseChannel = 'stable',
     installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
+    channel: DesktopReleaseChannel = 'stable',
   ): Promise<void> {
     const copy = desktopNativeCopy(this.currentLocale)
     const platform = this.platformStrategy.updateDownloadPlatform

@@ -159,10 +159,16 @@ export async function checkForDesktopUpdate(
     return null
   }
 
+  let digestInput: unknown
+  try {
+    digestInput = JSON.parse(body)
+  } catch {
+    digestInput = undefined
+  }
   const latest = parseVersionResponse(body, options.channel)
   if (latest === null) return null
   const comparison = compareParsedSemVer(latest, current)
-  const digests = parseInstallerDigestResponse(body)
+  const digests = parseInstallerDigestResponse(digestInput)
   return {
     status: comparison > 0 || (options.allowDowngrade === true && comparison !== 0)
       ? 'update-available'
@@ -285,7 +291,6 @@ function parseInstallerDigestResponse(value: unknown): UpdateCheckResult['instal
   if (windows !== undefined) digests.win32 = windows
   if (mac !== undefined) digests.darwin = mac
   return Object.keys(digests).length > 0 ? digests : undefined
-}
 }
 
 function parseCanonicalSupportedVersion(input: string): ParsedSemVer | null {
