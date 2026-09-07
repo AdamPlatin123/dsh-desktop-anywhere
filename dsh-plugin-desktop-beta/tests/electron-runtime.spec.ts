@@ -1070,6 +1070,23 @@ describe('Electron desktop runtime', () => {
       await release()
     })
 
+    it('recovers a crashed renderer while preserving a minimized window', async () => {
+      const { release, restart, window, gone, healthy } = await mountHealthyRenderer()
+      window.isMinimized.mockReturnValue(true)
+      const showCount = window.show.mock.calls.length
+      const focusCount = window.focus.mock.calls.length
+      gone({}, { reason: 'oom', exitCode: -536870904 })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(electron.webContents.reloadIgnoringCache).toHaveBeenCalledOnce()
+      healthy()
+
+      expect(window.restore).not.toHaveBeenCalled()
+      expect(window.show).toHaveBeenCalledTimes(showCount)
+      expect(window.focus).toHaveBeenCalledTimes(focusCount)
+      expect(restart).not.toHaveBeenCalled()
+      await release()
+    })
+
     it('recovers an isolated chrome crash and waits for both documents', async () => {
       const { runtime, release, healthy, logger } = await mountHealthyRenderer()
       const chromeGone = electron.chromeWebContents.on.mock.calls
@@ -1433,6 +1450,27 @@ describe('Electron desktop runtime', () => {
     expect(window?.show).toHaveBeenCalledOnce()
     expect(window?.focus).toHaveBeenCalledOnce()
 
+    await release()
+  })
+
+  it('does not restore or focus a minimized window when ready-to-show arrives late', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+    const runtime = new ElectronDesktopRuntime(async () => {})
+    const release = runtime.schedule(spec)
+    await runtime.mountScheduled()
+
+    const window = electron.browserWindows[0]!
+    const ready = window.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1]
+    expect(ready).toEqual(expect.any(Function))
+    window.isMinimized.mockReturnValue(true)
+    const showCount = window.show.mock.calls.length
+    const focusCount = window.focus.mock.calls.length
+    ready()
+
+    expect(window.restore).not.toHaveBeenCalled()
+    expect(window.show).toHaveBeenCalledTimes(showCount)
+    expect(window.focus).toHaveBeenCalledTimes(focusCount)
     await release()
   })
 
