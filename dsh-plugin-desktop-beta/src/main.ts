@@ -1007,6 +1007,7 @@ async function start(): Promise<void> {
           try {
             await resetDesktopDataDirectory({
               homeDir: recoveryDataLocation.homeDir,
+              userDataDir: marketUserDataDir,
               protectedPaths: [
                 app.getPath('home'),
                 app.getPath('appData'),
