@@ -16,4 +16,6 @@ The degraded-state prompt deliberately uses Electron's system-native message box
 
 ## Scope and verification
 
+Compatibility mode owns separate content and titlebar WebContents. Crash and load-failure listeners follow those carriers instead of the BrowserWindow host. Automatic recovery reloads both carriers and waits for both documents plus the content Loader's healthy report; a titlebar crash therefore cannot be mistaken for successful recovery after reloading only the conversation. Extended and advanced modes continue to use the window's renderer. Regression tests exercise content and titlebar crashes with distinct mocked WebContents.
+
 This change restores the interface automatically after a renderer exit; it neither diagnoses nor fixes renderer memory growth. It does not modify the upstream submodule. Headless tests cover health evidence ordering, timeout and Loader failures, synchronous reload errors, stable-period budget reset, crash loops, silent OOM/native-crash recovery, hidden-window preservation, failed main-frame loads, fallback deduplication, explicit retry, localization, intentional termination, shutdown/disposal races, and prompt failure. Windows GUI verification remains necessary to confirm automatic reload and the fallback prompt against an actual crashed renderer.

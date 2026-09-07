@@ -9,7 +9,9 @@ import {
   screen,
   shell,
   Tray,
+  type WebContents,
 } from 'electron'
+import { CompatibilityShell, type CompatibilityShellActions } from './compatibility-shell.ts'
 import { formatDesktopExitCode } from './desktop-logger.ts'
 import { showDesktopMessageBox } from './desktop-dialog-window.ts'
 import { applicationNeedsReveal, revealApplication } from './electron-reveal.ts'
@@ -47,10 +49,10 @@ function pairedWebSocketOrigin(origin: string): string {
  * the upstream redirect and keeps the launch token out of renderer history.
  */
 async function authenticateRendererSession(
-  window: BrowserWindow,
+  renderer: WebContents,
   spec: DesktopShellSpec,
 ): Promise<void> {
-  const session = window.webContents.session
+  const session = renderer.session
   const headers = {
     [spec.rendererAccessHeader.name]: spec.rendererAccessHeader.value,
   }
@@ -114,13 +116,13 @@ function requestComesFromRendererOrigin(
  * API requests, and upgrades do not retain the main-frame query string.
  */
 function installRendererAccessHeader(
-  window: BrowserWindow,
+  renderer: WebContents,
   origin: string,
   header: DesktopRendererAccessHeader,
 ): () => void {
   const webSocketOrigin = pairedWebSocketOrigin(origin)
-  const webRequest = window.webContents.session.webRequest
-  const webContentsId = window.webContents.id
+  const webRequest = renderer.session.webRequest
+  const webContentsId = renderer.id
   const listener = (
     details: Electron.OnBeforeSendHeadersListenerDetails,
     callback: (response: Electron.BeforeSendResponse) => void,
@@ -174,11 +176,14 @@ export interface ElectronShellGenerationOptions {
   readonly rendererRecoveryCopy: () => DesktopRestartConfirmationCopy
   readonly logError: (message: string) => void
   readonly mainWindowState: MainWindowStateStore
+  readonly chromeActions: CompatibilityShellActions
 }
 
 /** Own one BrowserWindow and Tray generation, including every native listener. */
 export class ElectronShellGeneration {
   private window: BrowserWindow | undefined
+  private renderer: WebContents | undefined
+  private compatibilityShell: CompatibilityShell | undefined
   private tray: Tray | undefined
   private mounted = false
   private released = false
@@ -189,12 +194,19 @@ export class ElectronShellGeneration {
   private cleanupListeners: (() => void) | undefined
   private readonly rendererRecovery: DesktopRendererRecovery
   private rendererRecoveryPending = false
+  private recoveryContentLoaded = false
+  private recoveryChromeLoaded = false
 
   constructor(private readonly options: ElectronShellGenerationOptions) {
     this.rendererRecovery = new DesktopRendererRecovery({
       available: () => !this.released && !this.options.isQuitting()
         && this.window !== undefined && !this.window.isDestroyed(),
-      reload: () => { this.reloadRenderer() },
+      reload: () => {
+        this.recoveryContentLoaded = false
+        this.recoveryChromeLoaded = this.compatibilityShell === undefined
+        this.compatibilityShell?.chromeWebContents.reloadIgnoringCache()
+        this.reloadRenderer()
+      },
       exhausted: () => { void this.offerRendererRecovery() },
       log: message => { this.options.logError(`dsh-plugin-desktop: ${message}`) },
     })
@@ -227,8 +239,17 @@ export class ElectronShellGeneration {
     } catch (cause) {
       this.options.logError(`dsh-plugin-desktop: failed to restore main-window state: ${cause instanceof Error ? cause.message : String(cause)}`)
     }
+    const isolated = spec.mode === 'compatibility' && platform.platform !== 'linux'
+    const windowOptions = desktopWindowOptions(spec, icon, platform.platform, this.options.preloadPath)
     const window = new BrowserWindow({
-      ...desktopWindowOptions(spec, icon, platform.platform, this.options.preloadPath),
+      ...windowOptions,
+      ...(isolated ? { webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+        partition: 'dsh-desktop-compatibility-host',
+      } } : {}),
       ...(restoredBounds ?? {}),
     })
     window.accessibleTitle = spec.windowTitle
@@ -239,6 +260,17 @@ export class ElectronShellGeneration {
     this.refreshNativeMaterial = refreshNativeMaterial
     refreshNativeMaterial()
     this.window = window
+    try {
+      if (isolated) {
+        this.compatibilityShell = new CompatibilityShell(window, spec, platform.platform, this.options.preloadPath, this.options.chromeActions)
+      }
+    } catch (cause) {
+      await this.release()
+      throw cause
+    }
+    const renderer = this.compatibilityShell?.webContents ?? window.webContents
+    const chrome = this.compatibilityShell?.chromeWebContents ?? window.webContents
+    this.renderer = renderer
 
     let stateWriteTimer: ReturnType<typeof setTimeout> | undefined
     const persistWindowState = (): void => {
@@ -345,11 +377,11 @@ export class ElectronShellGeneration {
       if (action === undefined) return
       event.preventDefault()
       if (action === 'reset') {
-        window.webContents.setZoomLevel(0)
+        renderer.setZoomLevel(0)
         return
       }
       const step = action === 'in' ? 1 : -1
-      window.webContents.setZoomLevel(clampedZoomLevel(window.webContents.getZoomLevel() + step))
+      renderer.setZoomLevel(clampedZoomLevel(renderer.getZoomLevel() + step))
     }
     const navigate = (event: Electron.Event<Electron.WebContentsWillFrameNavigateEventParams>): void => {
       if (!event.isMainFrame) return
@@ -402,7 +434,14 @@ export class ElectronShellGeneration {
         }
       }
     }
-    const loaded = (): void => { this.rendererRecovery.loaded() }
+    const loaded = (): void => {
+      this.recoveryContentLoaded = true
+      if (this.recoveryChromeLoaded) this.rendererRecovery.loaded()
+    }
+    const chromeLoaded = (): void => {
+      this.recoveryChromeLoaded = true
+      if (this.recoveryContentLoaded) this.rendererRecovery.loaded()
+    }
 
     app.on('activate', activate)
     if (platform.platform === 'darwin') app.on('did-become-active', activate)
@@ -411,13 +450,19 @@ export class ElectronShellGeneration {
     window.on('move', scheduleWindowStateWrite)
     window.on('resize', scheduleWindowStateWrite)
     window.on('page-title-updated', preserveBlankTitle)
-    window.webContents.on('before-input-event', handleZoomShortcut)
-    window.webContents.on('will-frame-navigate', navigate)
-    window.webContents.on('will-redirect', redirect)
-    window.webContents.on('render-process-gone', rendererGone)
-    window.webContents.on('did-fail-load', loadFailed)
-    window.webContents.on('did-finish-load', loaded)
-    window.webContents.setWindowOpenHandler(({ url }) => {
+    renderer.on('before-input-event', handleZoomShortcut)
+    renderer.on('will-frame-navigate', navigate)
+    renderer.on('will-redirect', redirect)
+    renderer.on('render-process-gone', rendererGone)
+    renderer.on('did-fail-load', loadFailed)
+    renderer.on('did-finish-load', loaded)
+    if (isolated) {
+      chrome.on('before-input-event', handleZoomShortcut)
+      chrome.on('render-process-gone', rendererGone)
+      chrome.on('did-fail-load', loadFailed)
+      chrome.on('did-finish-load', chromeLoaded)
+    }
+    renderer.setWindowOpenHandler(({ url }) => {
       try {
         const target = new URL(url)
         if (target.protocol === 'https:' || target.protocol === 'http:' || target.protocol === 'mailto:') {
@@ -443,12 +488,18 @@ export class ElectronShellGeneration {
       window.off('page-title-updated', preserveBlankTitle)
       window.off('ready-to-show', revealStartupSurface)
       cleanupFullscreenTransition()
-      window.webContents.off('before-input-event', handleZoomShortcut)
-      window.webContents.off('will-frame-navigate', navigate)
-      window.webContents.off('will-redirect', redirect)
-      window.webContents.off('render-process-gone', rendererGone)
-      window.webContents.off('did-fail-load', loadFailed)
-      window.webContents.off('did-finish-load', loaded)
+      renderer.off('before-input-event', handleZoomShortcut)
+      renderer.off('will-frame-navigate', navigate)
+      renderer.off('will-redirect', redirect)
+      renderer.off('render-process-gone', rendererGone)
+      renderer.off('did-fail-load', loadFailed)
+      renderer.off('did-finish-load', loaded)
+      if (isolated) {
+        chrome.off('before-input-event', handleZoomShortcut)
+        chrome.off('render-process-gone', rendererGone)
+        chrome.off('did-fail-load', loadFailed)
+        chrome.off('did-finish-load', chromeLoaded)
+      }
       removeRendererAccessHeader?.()
       removeRendererAccessHeader = undefined
       tray?.off('click', show)
@@ -459,14 +510,17 @@ export class ElectronShellGeneration {
     }
 
     try {
-      await authenticateRendererSession(window, spec)
+      await this.compatibilityShell?.load()
+      await authenticateRendererSession(renderer, spec)
       removeRendererAccessHeader = installRendererAccessHeader(
-        window,
+        renderer,
         origin,
         spec.rendererAccessHeader,
       )
       revealStartupSurface()
-      await window.loadURL(spec.url)
+      if (isolated) await renderer.loadURL(spec.url)
+      else await window.loadURL(spec.url)
+      if (isolated) renderer.focus()
       tray = new Tray(prepareTrayIcon(spec.trayIcons, platform.platform))
       this.tray = tray
       tray.setToolTip(spec.productName)
@@ -532,7 +586,7 @@ export class ElectronShellGeneration {
     if (window === undefined || window.isDestroyed()) {
       throw new Error('dsh-plugin-desktop: renderer reload requires a mounted window')
     }
-    window.webContents.reloadIgnoringCache()
+    this.renderer?.reloadIgnoringCache()
   }
 
   /** Toggle Developer Tools for the active renderer. */
@@ -541,8 +595,10 @@ export class ElectronShellGeneration {
     if (window === undefined || window.isDestroyed()) {
       throw new Error('dsh-plugin-desktop: Developer Tools require a mounted window')
     }
-    if (window.webContents.isDevToolsOpened()) window.webContents.closeDevTools()
-    else window.webContents.openDevTools({ mode: 'detach', activate: true })
+    const renderer = this.renderer
+    if (renderer === undefined || renderer.isDestroyed()) return
+    if (renderer.isDevToolsOpened()) renderer.closeDevTools()
+    else renderer.openDevTools({ mode: 'detach', activate: true })
   }
 
   notifyAttention(notification: DesktopNotification): void {
@@ -581,6 +637,7 @@ export class ElectronShellGeneration {
   }
 
   refreshTrayMenu(): void {
+    this.compatibilityShell?.refresh()
     if (this.tray === undefined) return
     this.tray.setContextMenu(Menu.buildFromTemplate(this.options.buildTrayTemplate()))
   }
@@ -608,6 +665,9 @@ export class ElectronShellGeneration {
 
     this.cleanupListeners?.()
     this.cleanupListeners = undefined
+    this.compatibilityShell?.dispose()
+    this.compatibilityShell = undefined
+    this.renderer = undefined
     tray?.destroy()
     if (!window.isDestroyed()) window.destroy()
   }
