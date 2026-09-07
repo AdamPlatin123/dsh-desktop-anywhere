@@ -27,6 +27,28 @@ import {
 } from '../src/window-chrome.ts'
 
 describe('desktop client environment', () => {
+  it.each(['darwin', 'win32', 'linux'])('keeps compatibility chrome out of the %s client slot tree', platform => {
+    const marker = platform === 'win32' ? '&dsh-desktop-mica=0' : ''
+    vi.stubGlobal('window', { location: {
+      search: `?dsh-desktop-platform=${platform}&dsh-desktop-mode=compatibility&dsh-desktop-version=2.0.3&dsh-desktop-material=off${marker}`,
+    } })
+    const effect = vi.fn()
+    const inject = vi.fn()
+    const ctx = {
+      effect,
+      slots: { inject },
+      locale: { bind: () => (key: string) => key },
+      settingsScope: { bind: () => ({}) },
+    } as unknown as ClientContext
+    try {
+      apply(ctx)
+      expect(inject.mock.calls.map(([name]) => name)).toEqual(['settings.section', 'settings.action'])
+      expect(effect.mock.calls.map(([, label]) => label)).not.toContain('desktop: independent compatibility frame styles')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('does not activate desktop effects for an ordinary browser URL', () => {
     vi.stubGlobal('window', { location: { search: '' } })
     const effect = vi.fn()
@@ -274,10 +296,10 @@ describe('advanced desktop layout', () => {
       material: 'off',
       micaSupported: false,
       availableMaterials: ['off', 'transparent'],
-      safeAreaInsets: { top: DESKTOP_FRAME_HEIGHT, right: 0, bottom: 0, left: 0 },
+      safeAreaInsets: { top: 0, right: 0, bottom: 0, left: 0 },
       dragRegion: {
-        height: DESKTOP_FRAME_HEIGHT,
-        leftInset: MACOS_TRAFFIC_LIGHT_SAFE_WIDTH,
+        height: 0,
+        leftInset: 0,
         rightInset: 0,
       },
     })
