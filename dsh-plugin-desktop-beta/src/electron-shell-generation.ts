@@ -19,6 +19,9 @@ import type { ElectronPlatformStrategy } from './electron-platform.ts'
 import type { DesktopNotification, DesktopShellSpec } from './runtime.ts'
 import { prepareTrayIcon } from './tray-icons.ts'
 import { desktopWindowOptions } from './window-options.ts'
+import type { DesktopRestartConfirmationCopy } from './tray-locale.ts'
+import type { RendererBootReport } from './renderer-boot-contract.ts'
+import { DesktopRendererRecovery } from './renderer-recovery.ts'
 import type { DesktopRendererAccessHeader } from './desktop-browser-access.ts'
 import {
   fitMainWindowBounds,
@@ -169,6 +172,8 @@ export interface ElectronShellGenerationOptions {
   readonly stopRendererBootMonitoring: () => void
   readonly abortRendererBootMonitoring: (cause: unknown) => void
   readonly failRendererBoot: (error: string) => void
+  readonly canRecoverRenderer: () => boolean
+  readonly rendererRecoveryCopy: () => DesktopRestartConfirmationCopy
   readonly logError: (message: string) => void
   readonly mainWindowState: MainWindowStateStore
   readonly chromeActions: CompatibilityShellActions
@@ -187,8 +192,25 @@ export class ElectronShellGeneration {
   private refreshNativeMaterial: (() => void) | undefined
   private flushWindowState: (() => void) | undefined
   private cleanupListeners: (() => void) | undefined
+  private readonly rendererRecovery: DesktopRendererRecovery
+  private rendererRecoveryPending = false
+  private recoveryContentLoaded = false
+  private recoveryChromeLoaded = false
 
-  constructor(private readonly options: ElectronShellGenerationOptions) {}
+  constructor(private readonly options: ElectronShellGenerationOptions) {
+    this.rendererRecovery = new DesktopRendererRecovery({
+      available: () => !this.released && !this.options.isQuitting()
+        && this.window !== undefined && !this.window.isDestroyed(),
+      reload: () => {
+        this.recoveryContentLoaded = false
+        this.recoveryChromeLoaded = this.compatibilityShell === undefined
+        this.compatibilityShell?.chromeWebContents.reloadIgnoringCache()
+        this.reloadRenderer()
+      },
+      exhausted: () => { void this.offerRendererRecovery() },
+      log: message => { this.options.logError(`dsh-plugin-desktop: ${message}`) },
+    })
+  }
 
   async mount(beforeInteractive?: () => void): Promise<void> {
     if (this.mounted || this.window !== undefined) {
@@ -390,6 +412,10 @@ export class ElectronShellGeneration {
       const detail = `renderer process gone (reason: ${details.reason}, exitCode: ${formatDesktopExitCode(details.exitCode)})`
       this.options.logError(`dsh-plugin-desktop: ${detail}`)
       this.options.failRendererBoot(detail)
+      if (details.reason !== 'clean-exit' && details.reason !== 'killed'
+        && this.options.canRecoverRenderer()) {
+        this.rendererRecovery.fail(detail)
+      }
     }
     const loadFailed = (
       _event: Electron.Event,
@@ -403,7 +429,18 @@ export class ElectronShellGeneration {
         this.options.failRendererBoot(
           `renderer main frame failed to load (${String(errorCode)}: ${errorDescription})`,
         )
+        if (this.options.canRecoverRenderer()) {
+          this.rendererRecovery.fail(`renderer main frame failed to load (${String(errorCode)}: ${errorDescription})`)
+        }
       }
+    }
+    const loaded = (): void => {
+      this.recoveryContentLoaded = true
+      if (this.recoveryChromeLoaded) this.rendererRecovery.loaded()
+    }
+    const chromeLoaded = (): void => {
+      this.recoveryChromeLoaded = true
+      if (this.recoveryContentLoaded) this.rendererRecovery.loaded()
     }
 
     app.on('activate', activate)
@@ -418,10 +455,12 @@ export class ElectronShellGeneration {
     renderer.on('will-redirect', redirect)
     renderer.on('render-process-gone', rendererGone)
     renderer.on('did-fail-load', loadFailed)
+    renderer.on('did-finish-load', loaded)
     if (isolated) {
       chrome.on('before-input-event', handleZoomShortcut)
       chrome.on('render-process-gone', rendererGone)
       chrome.on('did-fail-load', loadFailed)
+      chrome.on('did-finish-load', chromeLoaded)
     }
     renderer.setWindowOpenHandler(({ url }) => {
       try {
@@ -454,10 +493,12 @@ export class ElectronShellGeneration {
       renderer.off('will-redirect', redirect)
       renderer.off('render-process-gone', rendererGone)
       renderer.off('did-fail-load', loadFailed)
+      renderer.off('did-finish-load', loaded)
       if (isolated) {
         chrome.off('before-input-event', handleZoomShortcut)
         chrome.off('render-process-gone', rendererGone)
         chrome.off('did-fail-load', loadFailed)
+        chrome.off('did-finish-load', chromeLoaded)
       }
       removeRendererAccessHeader?.()
       removeRendererAccessHeader = undefined
@@ -500,6 +541,43 @@ export class ElectronShellGeneration {
     this.clearAttention()
     revealApplication(window, this.options.platform.platform)
     this.prepareFullscreenReveal?.()
+    if (this.rendererRecovery.exhausted) void this.offerRendererRecovery()
+  }
+
+  reportRendererRecovery(report: RendererBootReport): void {
+    this.rendererRecovery.report(report)
+  }
+
+  stopRendererRecovery(): void {
+    this.rendererRecovery.stop()
+  }
+
+  private async offerRendererRecovery(): Promise<void> {
+    const window = this.window
+    if (this.rendererRecoveryPending || this.released || this.options.isQuitting()
+      || window === undefined || window.isDestroyed() || !this.rendererRecovery.exhausted) return
+    this.rendererRecoveryPending = true
+    try {
+      this.show()
+      const copy = this.options.rendererRecoveryCopy()
+      const result = await dialog.showMessageBox(window, {
+        type: 'warning',
+        title: copy.title,
+        message: copy.message,
+        detail: `${copy.detail}\n\n${this.rendererRecovery.detail}`,
+        buttons: [copy.confirm, copy.cancel],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      })
+      if (result.response !== 0 || this.released || this.options.isQuitting()
+        || this.window !== window || window.isDestroyed()) return
+      this.rendererRecovery.retry()
+    } catch (cause) {
+      this.options.logError(`dsh-plugin-desktop: renderer recovery failed: ${cause instanceof Error ? cause.message : String(cause)}`)
+    } finally {
+      this.rendererRecoveryPending = false
+    }
   }
 
   /** Reload the active renderer without permitting arbitrary renderer commands. */
@@ -571,6 +649,7 @@ export class ElectronShellGeneration {
   async release(): Promise<void> {
     if (this.released) return
     this.released = true
+    this.rendererRecovery.stop()
     this.options.stopRendererBootMonitoring()
 
     const window = this.window
