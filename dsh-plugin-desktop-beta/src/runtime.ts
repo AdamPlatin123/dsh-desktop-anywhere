@@ -126,8 +126,8 @@ export interface DesktopUpdateAdapter {
   downloadAndOpen(
     version: string,
     signal: AbortSignal,
-    installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
     channel?: DesktopReleaseChannel,
+    installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
   ): Promise<void>
   /** Present a native status notification without blocking the Host tree. */
   notify(notification: DesktopNotification): void
