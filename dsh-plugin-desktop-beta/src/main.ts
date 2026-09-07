@@ -1581,14 +1581,6 @@ async function start(): Promise<void> {
           reloadRenderer: () => { runtime.reloadRenderer() },
           toggleDeveloperTools: () => { runtime.toggleDeveloperTools() },
           exportDiagnostics: () => runtime.exportDiagnostics(),
-          openProfileCreator: () => {
-            runtime.openProfileCreateWindow({
-              onSubmit: async name => {
-                hostCtx.desktopProfiles.create(name)
-                await hostCtx.desktopProfiles.select(name)
-              },
-            })
-          },
         }))
         provideCmdline(hostCtx, {
           args: [
