@@ -33,7 +33,7 @@ import {
   writeProfileManifest,
   type Profile,
   type ProfileManifest,
-  type ProfilePatchReload,
+  type ProfileTemplate,
 } from '@deepseek-ai/dsh-app-boot'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import FileSettingsProvider, {
@@ -252,7 +252,7 @@ function requiredWebBundles(): string[] {
 }
 
 /** User patch lifecycle inherited from the matching upstream Web profile. */
-function requiredWebPatchReload(): ProfilePatchReload {
+function requiredWebPatchReload(): ProfileTemplate['patchReload'] {
   const template = PROFILE_TEMPLATES.web
   if (template === undefined) {
     throw new Error(`${BIN_NAME}: installed dsh-app-boot has no web profile template`)

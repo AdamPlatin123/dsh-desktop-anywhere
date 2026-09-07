@@ -12,6 +12,7 @@ const allowedDifferences = new Set([
   'client/DesktopSettingsSection.tsx',
   'client/index.ts',
   'desktop-browser-access.ts',
+  'desktop-cli.ts', // alpha.2 requires explicit runCli dispatch after importing the CLI.
   'desktop-data-directory.ts',
   'desktop-data-operation-lock.ts',
   'desktop-dialog-window.ts',
