@@ -254,9 +254,9 @@ class DesktopUpdateLifecycleOwner implements DesktopUpdateLifecycle {
       this.registration.refresh()
       try {
         if (this.options.adapter.releaseChannel === undefined && channel === 'stable') {
-          await this.options.adapter.downloadAndOpen(version, controller.signal, confirmedDigests)
+          await this.options.adapter.downloadAndOpen(version, controller.signal, undefined, confirmedDigests)
         } else {
-          await this.options.adapter.downloadAndOpen(version, controller.signal, confirmedDigests, channel)
+          await this.options.adapter.downloadAndOpen(version, controller.signal, channel, confirmedDigests)
         }
       } catch {
         // Network, filesystem, and installer-opening failures are deliberately silent.

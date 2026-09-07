@@ -280,9 +280,10 @@ describe('desktop update Host plugin', () => {
 
     const pending = harness.tray.invoke()
     await vi.waitFor(() => { expect(harness.downloadAndOpen).toHaveBeenCalledOnce() })
-    const [version, , installerSha256] = harness.downloadAndOpen.mock.calls[0] as [
+    const [version, , , installerSha256] = harness.downloadAndOpen.mock.calls[0] as [
       string,
       AbortSignal,
+      unknown,
       Readonly<Partial<Record<'win32' | 'darwin', string>>> | undefined,
     ]
     expect(version).toBe('2.1.0')
@@ -304,7 +305,7 @@ describe('desktop update Host plugin', () => {
 
     const pending = harness.tray.invoke()
     await vi.waitFor(() => { expect(harness.downloadAndOpen).toHaveBeenCalledOnce() })
-    expect(harness.downloadAndOpen.mock.calls[0]?.[2]).toEqual({ darwin: 'd'.repeat(64) })
+    expect(harness.downloadAndOpen.mock.calls[0]?.[3]).toEqual({ darwin: 'd'.repeat(64) })
     await pending
   })
 
@@ -318,8 +319,8 @@ describe('desktop update Host plugin', () => {
 
     const pending = harness.tray.invoke()
     await vi.waitFor(() => { expect(harness.downloadAndOpen).toHaveBeenCalledOnce() })
-    const thirdArgument = harness.downloadAndOpen.mock.calls[0]?.[2]
-    expect(thirdArgument).toBeUndefined()
+    const digestArgument = harness.downloadAndOpen.mock.calls[0]?.[3]
+    expect(digestArgument).toBeUndefined()
     await pending
   })
 
