@@ -121,6 +121,23 @@ const electron = vi.hoisted(() => {
     reloadIgnoringCache: vi.fn(),
     setZoomLevel: vi.fn((level: number) => { zoomLevel = level }),
     setWindowOpenHandler: vi.fn(),
+    focus: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    close: vi.fn(),
+    loadURL,
+  }
+  const chromeWebContents = {
+    on: vi.fn(), off: vi.fn(),
+    isDestroyed: vi.fn(() => false),
+    setWindowOpenHandler: vi.fn(),
+    send: vi.fn(),
+    ipc: { handle: vi.fn(), removeHandler: vi.fn() },
+  }
+  const contentViews: WebContentsView[] = []
+  class WebContentsView {
+    readonly webContents = webContents
+    readonly setBounds = vi.fn()
+    constructor(readonly options: unknown) { contentViews.push(this) }
   }
   const nativeTheme = {
     themeSource: 'system',
@@ -128,10 +145,15 @@ const electron = vi.hoisted(() => {
   }
 
   class BrowserWindow {
-    readonly webContents = webContents
+    readonly webContents: typeof webContents | typeof chromeWebContents
+    readonly contentView = { addChildView: vi.fn(), removeChildView: vi.fn() }
+    readonly getContentSize = vi.fn(() => [1280, 840])
+    readonly loadFile = vi.fn(async () => {})
     accessibleTitle = ''
 
     constructor(options: unknown) {
+      this.webContents = (options as { webPreferences?: { partition?: string } }).webPreferences?.partition === 'dsh-desktop-compatibility-chrome'
+        ? chromeWebContents : webContents
       browserWindowOptions.push(options)
       browserWindowThemeSources.push(nativeTheme.themeSource)
       browserWindows.push(this)
@@ -212,6 +234,9 @@ const electron = vi.hoisted(() => {
     applicationMenuTemplates,
     blueIcon,
     BrowserWindow,
+    WebContentsView,
+    contentViews,
+    chromeWebContents,
     browserWindowOptions,
     browserWindowThemeSources,
     browserWindows,
@@ -274,6 +299,7 @@ vi.mock('../src/desktop-dialog-window.ts', async (importOriginal) => ({
 vi.mock('electron', () => ({
   app: electron.app,
   BrowserWindow: electron.BrowserWindow,
+  WebContentsView: electron.WebContentsView,
   dialog: electron.dialog,
   Menu: electron.Menu,
   nativeImage: electron.nativeImage,
@@ -320,6 +346,7 @@ describe('Electron desktop runtime', () => {
     electron.browserWindowOptions.length = 0
     electron.browserWindowThemeSources.length = 0
     electron.browserWindows.length = 0
+    electron.contentViews.length = 0
     electron.trays.length = 0
     electron.applicationMenuTemplates.length = 0
     electron.menuTemplates.length = 0
@@ -383,11 +410,24 @@ describe('Electron desktop runtime', () => {
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
-        partition: 'persist:dsh-desktop-renderer',
+        partition: 'dsh-desktop-compatibility-chrome',
       },
     }))
     expect(options).not.toHaveProperty('autoHideMenuBar')
     expect(options).not.toHaveProperty('titleBarOverlay')
+    expect(electron.contentViews).toHaveLength(1)
+    expect(electron.contentViews[0]?.options).toEqual({ webPreferences: {
+      preload: expect.stringMatching(/\/preload\.cjs$/),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      partition: 'persist:dsh-desktop-renderer',
+    } })
+    expect(electron.contentViews[0]?.setBounds).toHaveBeenCalledWith({ x: 0, y: 36, width: 1280, height: 804 })
+    expect(electron.browserWindows[0]?.loadFile).toHaveBeenCalledWith(expect.stringMatching(/compatibility-chrome\.html$/))
+    expect(electron.webContents.loadURL).toHaveBeenCalledWith(spec.url)
+    expect(electron.browserWindows[0]?.webContents).not.toBe(electron.webContents)
     expect(electron.browserWindows[0]?.accessibleTitle).toBe('DeepSeek Harness Desktop')
     expect(spec.readThemeSource).toHaveBeenCalledOnce()
     expect(electron.nativeTheme.themeSource).toBe('system')
@@ -747,6 +787,7 @@ describe('Electron desktop runtime', () => {
     await runtime.mountScheduled()
 
     expect(runtime.platform).toBe('linux')
+    expect(electron.contentViews).toHaveLength(0)
     expect(runtime.updates.canDownload).toBe(false)
     await expect(runtime.pickDirectory()).rejects.toThrow('native workspace picker is unavailable on linux')
     expect(electron.app.dock.setIcon).not.toHaveBeenCalled()
@@ -874,7 +915,7 @@ describe('Electron desktop runtime', () => {
     const rendererBoot = runtime.beginRendererBootMonitoring({ commitHealthy: async () => {} })
     await runtime.mountScheduled()
 
-    const failed = electron.browserWindows[0]?.webContents.on.mock.calls
+    const failed = electron.webContents.on.mock.calls
       .find(([event]) => event === 'did-fail-load')?.[1]
     expect(failed).toEqual(expect.any(Function))
     failed({}, -105, 'NAME_NOT_RESOLVED', 'http://127.0.0.1/subresource', false)
@@ -1063,7 +1104,7 @@ describe('Electron desktop runtime', () => {
 
     await runtime.mountScheduled()
 
-    const navigate = electron.browserWindows[0]?.webContents.on.mock.calls
+    const navigate = electron.webContents.on.mock.calls
       .find(([event]) => event === 'will-frame-navigate')?.[1]
     expect(navigate).toEqual(expect.any(Function))
 
@@ -2288,6 +2329,7 @@ describe('Electron desktop runtime', () => {
 
     expect(readThemeSource).toHaveBeenCalledOnce()
     expect(electron.browserWindowThemeSources).toEqual(['dark'])
+    expect(electron.contentViews).toHaveLength(0)
     expect(electron.nativeTheme.themeSource).toBe('dark')
     expect(electron.browserWindowOptions[0]).toEqual(expect.objectContaining({
       titleBarStyle: 'hiddenInset',
@@ -2353,6 +2395,7 @@ describe('Electron desktop runtime', () => {
       backgroundColor: '#202124',
       titleBarOverlay: expect.objectContaining({ height: DESKTOP_FRAME_HEIGHT }),
     }))
+    expect(electron.contentViews).toHaveLength(0)
     expect(electron.browserWindowOptions[0]).not.toHaveProperty('transparent')
     expect(electron.browserWindowOptions[0]).not.toHaveProperty('backgroundMaterial')
     expect(electron.menuTemplates[0]).toEqual(expect.arrayContaining([
