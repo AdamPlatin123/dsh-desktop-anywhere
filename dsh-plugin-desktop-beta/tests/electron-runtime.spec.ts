@@ -2154,6 +2154,40 @@ describe('Electron desktop runtime', () => {
     await release()
   })
 
+  it.each(['tray', 'application'] as const)('exits Safe Mode from the localized macOS %s menu', async surface => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+    const runtime = new ElectronDesktopRuntime(async () => {})
+    const exitSafeMode = vi.fn(async () => {})
+    const registration = runtime.registerTrayItem({
+      group: 'status',
+      order: -100,
+      label: () => desktopTrayLabel(runtime.locale, 'exitSafeMode'),
+      invoke: exitSafeMode,
+    })
+    const release = runtime.schedule(spec)
+    await runtime.mountScheduled()
+
+    type MenuCommand = { label?: string, enabled?: boolean, click?: () => void }
+    const menuItems = (): MenuCommand[] => surface === 'application'
+      ? (electron.applicationMenuTemplates.at(-1)?.[0] as { submenu: MenuCommand[] }).submenu
+      : electron.menuTemplates.at(-1) as MenuCommand[]
+    expect(menuItems()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Exit Safe Mode and Restart…', enabled: true }),
+    ]))
+    expect(menuItems().some(item => item.label === 'Enter Safe Mode…')).toBe(false)
+
+    runtime.setLocalePreference('zh')
+    const command = menuItems().find(item => item.label === '退出安全模式并重启…')
+    expect(command?.click).toEqual(expect.any(Function))
+    command?.click?.()
+    await vi.waitFor(() => { expect(exitSafeMode).toHaveBeenCalledOnce() })
+
+    registration.dispose()
+    expect(menuItems().some(item => item.label === '退出安全模式并重启…')).toBe(false)
+    await release()
+  })
+
   it('cancels, coalesces, and suppresses Safe Mode restart requests while quitting', async () => {
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
     const restart = vi.fn(async () => {})
