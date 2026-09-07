@@ -64,7 +64,9 @@ const workspaceManifest = JSON.parse(readFileSync(new URL('package.json', worksp
 const ciWorkflow = readFileSync(new URL('.github/workflows/ci.yml', workspaceRoot), 'utf8')
 const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
 const runtimeVersion = '0.1.2-rc.1'
-const betaRuntimeVersion = '0.1.3-alpha.1'
+const betaRuntimeVersion = (JSON.parse(readFileSync(
+  new URL('dsh-plugin-desktop-beta/package.json', workspaceRoot), 'utf8',
+)) as { dependencies: Record<string, string> }).dependencies['@deepseek-ai/dsh']
 const dshResolution = (name: string): unknown =>
   workspaceManifest.resolutions?.[`${name}@npm:${runtimeVersion}`]
 
@@ -290,7 +292,7 @@ describe('published package surface', () => {
       expect(String(resolution)).toContain(runtimeVersion)
     }
     for (const [selector, resolution] of betaResolutions) {
-      expect(selector).toMatch(/@npm:\^?0\.1\.3-alpha\.1$/u)
+      expect(selector).toMatch(/@npm:\^?0\.1\.3-alpha\.\d+$/u)
       expect(String(resolution)).toContain(betaRuntimeVersion)
     }
   })
