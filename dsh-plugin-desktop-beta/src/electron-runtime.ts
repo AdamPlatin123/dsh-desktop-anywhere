@@ -909,6 +909,11 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     if (tools.length > 0) items.push(...tools)
     if (tools.length > 0 && profiles.length > 0) items.push({ type: 'separator' })
     if (profiles.length > 0) items.push(...profiles)
+    const status = this.contributedTrayItems('status')
+    if (status.length > 0) {
+      if (items.length > 0) items.push({ type: 'separator' })
+      items.push(...status)
+    }
     return items
   }
 }
