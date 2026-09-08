@@ -35,7 +35,7 @@ describe('Desktop factory reset', () => {
     const userDataDir = join(root, 'desktop-state')
     const profiles = ['desktop', 'work'].map(name => join(home, 'profiles', name))
     const unrelated = join(root, 'other-home', 'profiles', 'desktop')
-    const versions = { desktopVersion: '2.0.5-beta.2', dshVersion: '0.1.3-alpha.2', setupRevision: 1 }
+    const versions = { desktopVersion: '2.0.6-beta.1', dshVersion: '0.1.3-alpha.2', setupRevision: 1 }
     const oldPreferences = {
       mode: 'advanced' as const,
       openBrowser: false,
@@ -97,7 +97,7 @@ describe('Desktop factory reset', () => {
     const profile = join(home, 'profiles', 'desktop')
     await selectDesktopMarketProvider(userDataDir, 'community-market')
     await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'completed', {
-      desktopVersion: '2.0.5-beta.2', dshVersion: '0.1.3-alpha.2', setupRevision: 1,
+      desktopVersion: '2.0.6-beta.1', dshVersion: '0.1.3-alpha.2', setupRevision: 1,
     })
 
     await expect(resetDesktopDataDirectory({

@@ -72,7 +72,7 @@ async function recordSetup(
   recordedAt: string,
 ): Promise<void> {
   await completeOrSkipDesktopSetupWizard(release.userDataDir, target.profile, 'completed', {
-    desktopVersion: release.identity.releaseChannel === 'stable' ? '2.0.4' : '2.0.5-beta.2',
+    desktopVersion: release.identity.releaseChannel === 'stable' ? '2.0.4' : '2.0.6-beta.1',
     dshVersion: '0.1.2-rc.1',
     setupRevision: 1,
   }, recordedAt)
