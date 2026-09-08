@@ -627,6 +627,9 @@ export function DesktopSettingsSection({
           <h3 id="dsh-desktop-aa-title">{t('aaTitle')}</h3>
           <p className="dshDesktopSettingsGroupIntro">{t('aaIntro')}</p>
         </div>
+        {view?.aa?.requested === true && !view.aa.effective && restart === 'none' && (
+          <p className="dshDesktopSettingsNotice" role="status">{t('aaLoadFailed')}</p>
+        )}
         {aaStatus === 'saving' && <p className="dshDesktopSettingsNotice" role="status">{t('aaSaving')}</p>}
         {aaStatus === 'failed' && <p className="dshDesktopSettingsError" role="alert">{t('aaSaveFailed')}</p>}
         {aaStatus === 'saved' && <p className="dshDesktopSettingsSuccess" role="status">
@@ -639,9 +642,11 @@ export function DesktopSettingsSection({
             badge={enabled ? t('beta') : undefined}
             body={t(enabled ? 'aaEnabledBody' : 'aaDisabledBody')}
             selected={(view.aa?.requested ?? false) === enabled}
+            reselectable={enabled && view.aa?.requested === true && !view.aa.effective}
             disabled={busy !== undefined || restart !== 'none'}
             action={() => { selectAa(enabled) }}
-            status={(view.aa?.requested ?? false) === enabled ? t('selected') : undefined}
+            status={enabled && view.aa?.requested === true && !view.aa.effective
+              ? t('retryAa') : (view.aa?.requested ?? false) === enabled ? t('selected') : undefined}
           />)}
         </div>}
       </section>

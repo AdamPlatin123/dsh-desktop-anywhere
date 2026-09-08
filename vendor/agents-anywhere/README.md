@@ -30,17 +30,31 @@ market provider. Old preferences and first-run selections default to disabled;
 skipping Setup explicitly saves disabled. Safe Mode excludes AA. Changing the
 option acknowledges persistence before scheduling a Desktop restart.
 
-Enabling loads AA's bundle and exposes its Phone connection sidebar entry.
-Account login and device pairing remain in AA. Connector startup requires uv
-(on PATH or via `UV_PATH`) and Python 3.12+, and may download Python dependencies.
-Desktop provides a Profile-specific discovery home (`agents-anywhere/runtime`
-under the Profile), a Profile-specific state directory, and a physical Connector
-source path. AA uses this discovery home only for its endpoint and Connector;
-the actual Harness home and session storage remain unchanged. A Connector paired
-with another Profile or the global DSH home cannot automatically attach to this
-Profile. Existing per-Profile accounts remain valid and reconnect at the new
-endpoint after restart; new Profiles must be authorized through Phone connection.
-Selecting the option alone does not log in or start pairing.
+Enabling adds AA to the selected bundle list, resolves it through the same
+Desktop/Profile package overlay as dshmarket, and reads the package's declared
+`dsh.bundle.patch`. Desktop preserves that patch and supplies only the real
+DSH home and the physical Connector payload path required by Electron ASAR.
+The package retains ownership of login, device pairing, account storage, and
+its native runtime endpoint. Desktop does not rewrite `stateRoot` or invent a
+separate DSH home for each Profile. Native AA account/device state may therefore
+be reused across Profiles; the Desktop enable/disable preference stays per Profile.
+
+A missing or malformed bundle, invalid canonical entry, missing Connector
+payload, or conflicting AA user patch disables AA for that generation. Desktop
+logs the diagnostic and Settings shows a retry action. This preflight follows
+the market loading boundary; it does not suppress arbitrary errors thrown later
+by a plugin during Cordis initialization.
+
+Connector startup requires uv (on PATH or via `UV_PATH`) and Python 3.12+, and
+may download Python dependencies. AA's native handling of an installed Agents
+Anywhere desktop app remains in effect. The older `@agents-anywhere/dsh-bridge`
+is a separate user plugin, not the bundled `dsh-bridge-next`; its configuration
+is not migrated or removed by this option.
+
+The earlier integration wrote AA accounts under each Profile's `agents-anywhere`
+directory. Those files are preserved but are no longer selected automatically;
+users may need to sign in once using AA's native state directory. No account,
+credential, or device binding is silently copied between the two layouts.
 
 ## Validation of this pin
 

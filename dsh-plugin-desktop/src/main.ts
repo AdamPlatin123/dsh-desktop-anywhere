@@ -1334,6 +1334,9 @@ async function start(): Promise<void> {
         throw new Error(`${BIN_NAME}: Profile dependency migration failed: ${maskSecrets(detail)}`)
       }
     }
+    if (prepared.aaFailure !== undefined) {
+      electronLogger.error(`${BIN_NAME}: requested AA bundle was disabled for this generation: ${maskSecrets(prepared.aaFailure)}`)
+    }
     if (prepared.marketFailure !== undefined) {
       electronLogger.error(
         `${BIN_NAME}: requested Market provider ${prepared.market.requested} was disabled for this generation: ${prepared.marketFailure}`,

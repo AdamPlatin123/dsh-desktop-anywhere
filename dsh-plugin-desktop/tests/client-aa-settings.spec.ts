@@ -13,7 +13,7 @@ function scope(value: unknown) {
   return { getSnapshot: () => snapshot, subscribe: () => () => {} }
 }
 
-async function mount(selectAa: (enabled: boolean) => Promise<{ accepted: true; restartRequired: boolean }>) {
+async function mount(selectAa: (enabled: boolean) => Promise<{ accepted: true; restartRequired: boolean }>, aa = { requested: false, effective: false }) {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   container = document.createElement('div')
   document.body.append(container)
@@ -22,7 +22,7 @@ async function mount(selectAa: (enabled: boolean) => Promise<{ accepted: true; r
     t: (key: keyof typeof zh) => zh[key],
     api: {
       read: async () => ({ current: 'desktop', profiles: [],
-        aa: { requested: false, effective: false },
+        aa,
         market: { requested: 'disabled', effective: 'disabled', legacyDefaulted: false },
         web: { localUrl: '', lanUrls: [], lanState: 'inactive', lanError: null, lanCaFingerprint: null, lanCaUrls: [] },
       }), selectAa,
@@ -47,6 +47,15 @@ afterEach(async () => {
 })
 
 describe('AA settings clicks', () => {
+  it('shows a failed bundle load and allows retrying the already selected option', async () => {
+    const select = vi.fn(async () => ({ accepted: true as const, restartRequired: true }))
+    const section = await mount(select, { requested: true, effective: false })
+    expect(section.textContent).toContain(zh.aaLoadFailed)
+    expect(enabledChoice(section).textContent).toContain(zh.retryAa)
+    await act(async () => { enabledChoice(section).click() })
+    expect(select).toHaveBeenCalledWith(true)
+  })
+
   it('shows pending feedback next to the cards, then selects AA only after persistence succeeds', async () => {
     let complete!: (value: { accepted: true; restartRequired: boolean }) => void
     const select = vi.fn(() => new Promise<{ accepted: true; restartRequired: boolean }>(resolve => { complete = resolve }))

@@ -2,6 +2,8 @@
 
 export const zh = {
   aaSaving: '正在保存 Agents Anywhere 选项…',
+  aaLoadFailed: 'Agents Anywhere 未能加载，本次已关闭。请检查日志或重新选择启用以重试。',
+  retryAa: '重试加载',
   aaSaveFailed: '未能保存 Agents Anywhere 选项，请重试。',
   aaSaved: 'Agents Anywhere 选项已保存。',
   aaTitle: 'Agents Anywhere',
@@ -119,6 +121,8 @@ export type DesktopSettingsLocaleKey = keyof typeof zh
 
 export const en: Record<DesktopSettingsLocaleKey, string> = {
   aaSaving: 'Saving Agents Anywhere preference…',
+  aaLoadFailed: 'Agents Anywhere could not load and is disabled for this run. Check the logs or select it again to retry.',
+  retryAa: 'Retry loading',
   aaSaveFailed: 'Could not save Agents Anywhere preference. Please try again.',
   aaSaved: 'Agents Anywhere preference saved.',
   aaTitle: 'Agents Anywhere',
