@@ -1239,7 +1239,7 @@ describe('bundled Agents Anywhere', () => {
     prepareDesktopProfile('1', home)
     const packageDir = installBundle(home, '@agents-anywhere/dsh-bridge-next', [
       '- insert:', '    - id: agents-anywhere-bridge-next', '      name: "@agents-anywhere/dsh-bridge-next"',
-      '      config:', '        apiBaseUrl: "https://aa.example.com"', '        autoStart: false',
+      '      config:', '        apiBaseUrl: "https://aa.example.com"', '        uvPath: "/custom-uv"',
       '        stateRoot: "/custom-aa-state"', '',
     ].join('\n'), '99.0.0')
     writeFileSync(join(packageDir, 'native.patch.yml'), readFileSync(join(packageDir, 'cordis.patch.yml')))
@@ -1254,7 +1254,7 @@ describe('bundled Agents Anywhere', () => {
     expect(enabled.aaFailure).toBeUndefined()
     expect(enabled.profile.layers.find(layer => layer.packageName === '@agents-anywhere/dsh-bridge-next')?.packageDir).toBe(packageDir)
     const row = composeEntries([enabled.patches]).find(row => row.name === '@agents-anywhere/dsh-bridge-next')!
-    expect(row.config).toMatchObject({ apiBaseUrl: 'https://aa.example.com', autoStart: false, stateRoot: '/custom-aa-state', dshHome: home })
+    expect(row.config).toMatchObject({ apiBaseUrl: 'https://aa.example.com', uvPath: '/custom-uv', stateRoot: '/custom-aa-state', dshHome: home })
   })
   it.each(['missing-patch', 'invalid-yaml', 'invalid-row', 'missing-payload'])('keeps Desktop bootable when the optional AA bundle has %s', failure => {
     const home = temporaryHome()

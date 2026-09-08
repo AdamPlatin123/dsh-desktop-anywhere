@@ -6,14 +6,15 @@ Desktop does not require an adjacent AA checkout at runtime. It includes the
 Host and browser bundles, their source maps, and Python Connector sources.
 The source code is unchanged. The manifest has a Desktop build version and
 explicit peers for both Desktop runtime versions (including the emitted
-`dsh-llm` import). The SHA-256 identifies the exact shipped artifact.
+`dsh-llm` and `dsh-session` imports). The SHA-256 identifies the exact shipped artifact.
 
 ## Updating
 
 1. Check out the selected AA commit in a separate checkout.
 2. In `dsh-bridge-next`, run `corepack yarn install`, `corepack yarn check`.
-   Its integration tests also use `connector`, `contracts`, `desktop-workbench`
-   and `server` from that same checkout, plus uv/Python.
+   Its integration tests also use `connector`, `contracts`, `desktop-workbench`,
+   `web-next`, and `server` from that same checkout, plus uv/Python. Initialize
+   Python dependencies before running the integration suite.
 3. In a staging copy, set a new exact Desktop build version and the reviewed
    runtime peer ranges. Package `package.json`, `lib`, `cordis.patch.yml`,
    `README.md`, `RUNTIME_READS.md`, and `USER_QUESTIONS.md` beneath `package/`
@@ -58,17 +59,21 @@ credential, or device binding is silently copied between the two layouts.
 
 ## Validation of this pin
 
-Both Desktop variants pass their build, type checks, unit suites, runtime
-closure, CLI, Loader, profile, license and operation checks. The explicit AA
-profile smoke checks both Host services and the browser module graph.
+The current artifact comes from AA v2 commit
+`f63467318ca72bf3493b29610aed4e293f4dcdb1` and includes the matching Python
+Connector sources. Its Host bundle newly imports `dsh-session`, which is
+explicitly declared as a peer alongside `dsh-llm` and `dsh-typert-protocol`.
 
-AA's own suite at the pinned commit passes 70 of 72 tests in an isolated copy.
-The event and question Python/backend tests fail in Server migration `v2_14`:
-SQLite rejects `ALTER COLUMN`. This is upstream Server test compatibility,
-not a Desktop Loader failure. End-to-end pairing with a deployed AA Server has
-not been performed here.
+In an isolated source export, TypeScript checking, Host/client builds, build
+artifact and real Client factory DOM checks passed. After installing Python
+dependencies and including the Web test fixtures, all 110 plugin tests passed
+with `--test-concurrency=1`; 55 targeted Connector tests passed. This includes
+controlled Python/backend integration, not an interactive real-model or phone
+acceptance test. The first parallel run encountered incomplete test prerequisites
+and a short RPC timeout assertion; the complete serial run passed without source
+changes.
 
-A macOS arm64 directory package passes the selective ASAR payload check and
-contains the physical Connector sources. The existing final Electron fuses
-hook fails to infer the architecture of the directory-only target; a complete
-release/package gate is therefore not claimed for this validation.
+The source is unchanged. Desktop-specific manifest changes and the artifact
+SHA-256 are recorded in `provenance.json`. Desktop validation for this update
+covers both variants' profile tests and actual Host/client loading, including
+failure fallback. A new signed release package is not part of this update.

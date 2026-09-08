@@ -1,16 +1,16 @@
 {
   "repository": "https://github.com/anywhere-labs/Agents-Anywhere",
   "branch": "v2",
-  "commit": "b4385be75820649f08a154ac1a8aba63ea25196d",
+  "commit": "f63467318ca72bf3493b29610aed4e293f4dcdb1",
   "packageDirectory": "dsh-bridge-next",
   "sourceVersion": "0.1.0-dev.0",
-  "desktopVersion": "0.1.0-dev.0.desktop.1",
-  "artifact": "agents-anywhere-dsh-bridge-next-0.1.0-dev.0.desktop.1.tgz",
-  "sha256": "4c17d3f02aa297899c927d9450308e78ea9b181fbe942868f8e4bddeecc82f95",
+  "desktopVersion": "0.1.0-dev.0.desktop.2",
+  "artifact": "agents-anywhere-dsh-bridge-next-0.1.0-dev.0.desktop.2.tgz",
+  "sha256": "35b1dbfed29098ac2efbe2b8e931cccf125fd7a7b96af51e1b894bd36159a7dc",
   "manifestChanges": [
-    "version set to 0.1.0-dev.0.desktop.1",
+    "version set to 0.1.0-dev.0.desktop.2",
     "typert-protocol peer accepts 0.1.2-rc.1 or 0.1.3-alpha.2",
-    "declare dsh-llm peer for the emitted Host runtime import"
+    "declare dsh-llm and dsh-session peers for emitted Host runtime imports"
   ],
   "sourceChanges": []
 }

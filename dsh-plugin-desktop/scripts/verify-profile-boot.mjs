@@ -94,7 +94,7 @@ try {
     ...prepared.patches,
     // Keep this headless probe independent of the operator's AA account.
     ...(prepared.aaEnabled ? [{ id: 'agents-anywhere-bridge-next', config: {
-      dshHome: home, stateRoot: join(home, 'aa-smoke-state'), autoStart: false,
+      dshHome: home, stateRoot: join(home, 'aa-smoke-state'),
     } }] : []),
   ]
   const packageRoot = new URL('../', import.meta.url)
