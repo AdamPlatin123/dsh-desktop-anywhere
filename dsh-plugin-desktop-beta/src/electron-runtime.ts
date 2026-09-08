@@ -95,6 +95,9 @@ const PRODUCT_VERSION = desktopProductVersion()
 /** Main-process deadline for one Renderer generation to settle its client Loader. */
 export const RENDERER_BOOT_TIMEOUT_MS = 30_000
 
+/** HTTP statuses whose Response must be constructed without a body stream. */
+const NULL_BODY_STATUSES = new Set([204, 205, 304])
+
 /**
  * Download-request adapter over Electron `net.request`. `net.fetch` cannot
  * back the download origin gate: its Response carries an empty `url` (a
@@ -126,13 +129,33 @@ export function requestDesktopArtifact(url: string, init: RequestInit): Promise<
       for (const [key, value] of Object.entries(incoming.headers)) {
         for (const item of Array.isArray(value) ? value : [value]) headers.append(key, item)
       }
-      resolve({
-        response: new Response(Readable.toWeb(incoming as unknown as Readable) as unknown as ReadableStream<Uint8Array>, {
-          status,
-          headers,
-        }),
-        finalUrl,
-      })
+      try {
+        resolve({
+          // Constructing a Response with a body throws synchronously for
+          // null-body statuses (204/205/304), and a synchronous throw inside
+          // this event callback would escape the Promise and crash the main
+          // process, so those statuses resolve without a body stream and any
+          // construction failure rejects instead.
+          response: new Response(
+            NULL_BODY_STATUSES.has(status)
+              ? null
+              : Readable.toWeb(incoming as unknown as Readable) as unknown as ReadableStream<Uint8Array>,
+            { status, headers },
+          ),
+          finalUrl,
+        })
+      } catch (cause) {
+        reject(cause instanceof Error ? cause : new Error(String(cause)))
+      }
+    })
+    request.on('abort', () => {
+      if (settled) return
+      settled = true
+      // ClientRequest.abort() emits 'abort', not 'error', so without this
+      // handler a pre-response cancellation would leave the promise pending.
+      reject(init.signal instanceof AbortSignal && init.signal.reason !== undefined
+        ? init.signal.reason
+        : new DOMException('The operation was aborted', 'AbortError'))
     })
     request.on('error', cause => {
       if (settled) return

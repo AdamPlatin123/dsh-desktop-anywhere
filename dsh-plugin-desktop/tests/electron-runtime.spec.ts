@@ -2779,8 +2779,9 @@ describe('desktop artifact request adapter', () => {
       followRedirect,
       abort() {
         abort()
-        // Electron surfaces a cancelled request through the error event.
-        for (const listener of listeners.get('error') ?? []) listener(new Error('aborted by caller'))
+        // Electron's ClientRequest.abort() emits the 'abort' event; the
+        // 'error' event is reserved for transport failures.
+        for (const listener of listeners.get('abort') ?? []) listener()
       },
       end() {
         let hopIndex = 0
@@ -2871,7 +2872,20 @@ describe('desktop artifact request adapter', () => {
     })
     controller.abort()
 
-    await expect(pending).rejects.toThrow('aborted by caller')
+    await expect(pending).rejects.toThrow('operation was aborted')
     expect(fake.abort).toHaveBeenCalledOnce()
+  })
+
+  it('resolves null-body statuses without constructing a body stream', async () => {
+    const fake = fakeNetRequest([{ status: 204, headers: {} }])
+    electron.net.request.mockImplementationOnce(() => fake.request)
+
+    const { requestDesktopArtifact } = await import('../src/electron-runtime.ts')
+    const settled = await requestDesktopArtifact('https://www.dshdesktop.cn/api/downloads/mac', {
+      method: 'GET',
+    })
+
+    expect(settled.response.status).toBe(204)
+    expect(await settled.response.text()).toBe('')
   })
 })
