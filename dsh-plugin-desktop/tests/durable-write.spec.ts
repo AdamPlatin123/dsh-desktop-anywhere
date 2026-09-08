@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,6 +53,27 @@ describe('writeDurableFile', () => {
 
     expect(readFileSync(target, 'utf8')).toBe('original')
     expect(readdirSync(directory).filter(name => name.includes('.tmp'))).toEqual([])
+  })
+
+  it('inherits the permission bits of an existing regular file', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-durable-write-mode-'))
+    roots.push(directory)
+    const path = join(directory, 'config.yaml')
+    writeFileSync(path, 'old\n', { mode: 0o600 })
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+
+    const { writeDurableFile } = await import('../src/durable-write.ts')
+    writeDurableFile(path, Buffer.from('new\n', 'utf8'), 0o666)
+
+    // An atomic replacement must not widen a tightened mode through umask
+    // (0o666 under umask 022 would land as world-readable 0o644).
+    expect(readFileSync(path, 'utf8')).toBe('new\n')
+    expect(statSync(path).mode & 0o777).toBe(0o600)
+
+    // A fresh target still uses the caller-supplied default.
+    const fresh = join(directory, 'fresh.yaml')
+    writeDurableFile(fresh, Buffer.from('x\n', 'utf8'), 0o600)
+    expect(statSync(fresh).mode & 0o777).toBe(0o600)
   })
 
   it('loops when writeSync writes fewer bytes than requested', async () => {

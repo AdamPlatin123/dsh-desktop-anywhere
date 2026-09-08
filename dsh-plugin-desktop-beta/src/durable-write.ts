@@ -1,7 +1,7 @@
 /** Synchronous durable file writes shared by profile-owned configuration paths. */
 
 import { randomUUID } from 'node:crypto'
-import { closeSync, fsyncSync, openSync, renameSync, unlinkSync, writeSync } from 'node:fs'
+import { closeSync, fsyncSync, lstatSync, openSync, renameSync, unlinkSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 /**
@@ -9,13 +9,22 @@ import { dirname } from 'node:path'
  * rename over the target. The rename replaces the directory entry instead of
  * following a pre-existing symlink at the target path, and a failure never
  * leaves a truncated file behind. Callers own directory creation and
- * permissions.
+ * permissions. When the target already exists as a regular file, its own
+ * permission bits are inherited: an atomic replacement must not widen an
+ * administrator- or user-tightened mode (for example a 0o600 config replaced
+ * through the default 0o666 mode under umask 022).
  */
 export function writeDurableFile(path: string, bytes: Uint8Array, mode = 0o600): void {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
   let fd: number | undefined
   try {
-    fd = openSync(temporary, 'wx', mode)
+    // lstat does not follow symlinks: a symlinked target is replaced, not
+    // measured, and the caller-supplied mode applies unchanged.
+    const existing = lstatSync(path, { throwIfNoEntry: false })
+    const effectiveMode = existing !== undefined && existing.isFile()
+      ? (existing.mode & 0o777)
+      : mode
+    fd = openSync(temporary, 'wx', effectiveMode)
     // writeSync may write fewer bytes than requested (interrupted by a
     // signal, filesystem quirks); loop until the buffer is fully consumed
     // so fsync and rename never promote a short write to "complete".
