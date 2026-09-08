@@ -163,6 +163,36 @@ describe('profile materializer', () => {
     expect(environment.NODE).toBe('/private/node-bin/node')
   })
 
+  it('strips the whole PNPM_CONFIG_ family that the packaged pnpm would resolve', async () => {
+    const child = fakeChild()
+    let spawnOptions: SpawnOptions | undefined
+    const spawn = vi.fn((_command: string, _args: readonly string[], selectedOptions: SpawnOptions) => {
+      spawnOptions = selectedOptions
+      return child as unknown as ChildProcess
+    }) as unknown as ProfileMaterializerSpawn
+    const scrubParent = vi.fn(() => ({
+      // pnpm resolves its own config family: a global pnpmfile loads an
+      // attacker-chosen module that --frozen-lockfile does not stop.
+      pnpm_config_global_pnpmfile: '/tmp/payload-pnpmfile.cjs',
+      pnpm_config_registry: 'https://evil-registry.example',
+      Pnpm_Config_Cafile: '/tmp/rogue-ca.pem',
+      pnpm_config_fetch_retries: '9',
+      // the explicit npm-prefixed build flags must survive untouched
+      npm_config_runtime: 'electron',
+    } as NodeJS.ProcessEnv))
+    const resultPromise = materializeProfile({ ...options(spawn), scrubParent })
+    child.stdout.end('installed\n')
+    child.stderr.end('')
+    child.emit('close', 0, null)
+    await resultPromise
+    const environment = spawnOptions?.env ?? {}
+    expect(environment.pnpm_config_global_pnpmfile).toBeUndefined()
+    expect(environment.pnpm_config_registry).toBeUndefined()
+    expect(environment.Pnpm_Config_Cafile).toBeUndefined()
+    expect(environment.pnpm_config_fetch_retries).toBeUndefined()
+    expect(environment.npm_config_runtime).toBe('electron')
+  })
+
   it('drops case-variant duplicates of the explicit keys on Windows', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const child = fakeChild()

@@ -146,7 +146,13 @@ const MATERIALIZER_STRIPPED_ENV_KEYS = new Set([
 function materializerParentEnv(scrubParent: () => NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const parent = { ...scrubParent() }
   for (const inherited of Object.keys(parent)) {
-    if (MATERIALIZER_STRIPPED_ENV_KEYS.has(inherited.toUpperCase())) delete parent[inherited]
+    const upper = inherited.toUpperCase()
+    // The packaged package manager is pnpm, which additionally resolves its
+    // own PNPM_CONFIG_* family (for example pnpm_config_global_pnpmfile can
+    // load an attacker-chosen hook module that --frozen-lockfile does not
+    // stop). No explicit key below uses that family, so strip the whole
+    // prefix rather than enumerate it.
+    if (MATERIALIZER_STRIPPED_ENV_KEYS.has(upper) || upper.startsWith('PNPM_CONFIG_')) delete parent[inherited]
   }
   if (process.platform === 'win32') {
     const explicit = new Set(MATERIALIZER_ENV_KEYS.map(key => key.toUpperCase()))
