@@ -84,6 +84,7 @@ export interface DesktopRecoveryCopy {
   readonly dataDirectoryUnavailable: string
   readonly dataDirectoryPath: string
   readonly dataDirectoryPlaceholder: string
+  readonly dataDirectoryPathHint: string
   readonly selectDataDirectory: string
   readonly browse: string
   readonly applyDataDirectory: string
@@ -224,6 +225,7 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     dataDirectoryUnavailable: 'Data management is unavailable before the active DSH Home is resolved or while Safe Mode is active.',
     dataDirectoryPath: 'New data directory',
     dataDirectoryPlaceholder: 'Enter the full path',
+    dataDirectoryPathHint: 'We recommend using a path without Chinese characters.',
     selectDataDirectory: 'Select a DSH data directory',
     browse: 'Browse…',
     applyDataDirectory: 'Change directory and restart',
@@ -366,6 +368,7 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     dataDirectoryUnavailable: '尚未解析出当前 DSH Home，或正处于安全模式，因此暂时无法管理用户数据目录。',
     dataDirectoryPath: '新的数据目录',
     dataDirectoryPlaceholder: '输入完整路径',
+    dataDirectoryPathHint: '建议不要使用中文路径。',
     selectDataDirectory: '选择 DSH 数据目录',
     browse: '浏览…',
     applyDataDirectory: '更改目录并重启',

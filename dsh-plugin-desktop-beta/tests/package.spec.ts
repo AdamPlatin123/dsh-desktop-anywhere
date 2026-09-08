@@ -74,7 +74,7 @@ const dshResolution = (name: string): unknown =>
 describe('published package surface', () => {
   it('keeps the private workspace version-neutral and versions the Beta package', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.5-beta.2')
+    expect(manifest.version).toBe('2.0.6-beta.1')
   })
 
   it('runs desktop and community market typechecks from the root command', () => {
@@ -639,6 +639,9 @@ describe('published package surface', () => {
     const prepare = main.indexOf('let prepared = prepareDesktopProfile(')
     const setupState = main.indexOf('readDesktopSetupWizardState(', prepare)
     const setupWindow = main.indexOf('new DesktopSetupWizardWindow({', setupState)
+    const usageHistory = main.indexOf('!hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName)', setupState)
+    expect(usageHistory).toBeGreaterThan(setupState)
+    expect(setupWindow).toBeGreaterThan(usageHistory)
     const setupRun = main.indexOf('await setupWizardWindow.run()', setupWindow)
     const skipBranch = main.indexOf("if (setupResult.action === 'skip')", setupRun)
     const completeBranch = main.indexOf('} else {', skipBranch)
@@ -827,7 +830,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.5-beta.2')
+    expect(manifest.version).toBe('2.0.6-beta.1')
     expect(manifest.name).toBe('dsh-plugin-desktop-beta')
     expect(manifest.bin).toEqual({
       'dsh-desktop-beta': 'lib/bin.js',

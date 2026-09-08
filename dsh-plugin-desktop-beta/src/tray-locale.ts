@@ -15,9 +15,10 @@ export type DesktopTrayLabelKey =
   | 'openTerminal'
   | 'profile'
   | 'quit'
-  | 'switchToAdvanced'
-  | 'switchToCompatibility'
-  | 'switchToExtended'
+  | 'shellMode'
+  | 'advanced'
+  | 'compatibility'
+  | 'extended'
   | 'installStable'
   | 'unavailableForDesktop'
   | 'updateAvailable'
@@ -35,9 +36,10 @@ const labels: Record<DesktopLocale, Record<DesktopTrayLabelKey, (value: string) 
     openTerminal: () => 'Open DSH Terminal',
     profile: profileName => `Profile: ${profileName}`,
     quit: () => 'Quit',
-    switchToAdvanced: () => 'Switch to Enhanced Mode',
-    switchToCompatibility: () => 'Switch to Compatibility Mode',
-    switchToExtended: () => 'Switch to Extended Window',
+    shellMode: mode => `Mode: ${mode}`,
+    advanced: () => 'Enhanced Mode',
+    compatibility: () => 'Compatibility Mode',
+    extended: () => 'Extended Window',
     installStable: () => 'Install Stable Edition…',
     unavailableForDesktop: profileName => `${profileName} (Unavailable for Desktop)`,
     updateAvailable: version => `DSH Desktop ${version} Available`,
@@ -54,9 +56,10 @@ const labels: Record<DesktopLocale, Record<DesktopTrayLabelKey, (value: string) 
     openTerminal: () => '打开 DSH 终端',
     profile: profileName => `Profile：${profileName}`,
     quit: () => '退出',
-    switchToAdvanced: () => '切换到增强模式',
-    switchToCompatibility: () => '切换到兼容模式',
-    switchToExtended: () => '切换到扩展窗口',
+    shellMode: mode => `模式：${mode}`,
+    advanced: () => '增强模式',
+    compatibility: () => '兼容模式',
+    extended: () => '扩展窗口',
     installStable: () => '安装稳定版…',
     unavailableForDesktop: profileName => `${profileName}（不可用于桌面端）`,
     updateAvailable: version => `DSH Desktop ${version} 可用`,

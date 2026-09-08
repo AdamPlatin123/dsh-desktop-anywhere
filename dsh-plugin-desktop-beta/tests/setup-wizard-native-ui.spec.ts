@@ -26,7 +26,7 @@ import { DialogClose } from '../src/native-ui/components/ui/dialog.tsx'
 import { desktopSetupWizardCopy } from '../src/setup-wizard-copy.ts'
 
 const input: DesktopSetupWizardInput = {
-  appVersion: '2.0.5-beta.2',
+  appVersion: '2.0.6-beta.1',
   profileName: 'work',
   platform: 'darwin',
   micaSupported: false,

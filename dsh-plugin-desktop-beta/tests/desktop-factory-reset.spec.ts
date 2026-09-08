@@ -12,6 +12,7 @@ import { completeOrSkipDesktopSetupWizard, readDesktopSetupWizardState } from '.
 import { readDesktopMarketStateForUserData, selectDesktopMarketProvider } from '../src/desktop-market.ts'
 import { readDesktopSetupWizardSettings } from '../src/setup-wizard-settings.ts'
 import { readDesktopDisabledBundles } from '../src/desktop-plugins.ts'
+import { clearDesktopProfileUsageHistory, desktopReleaseUserDataLocations } from '../src/profile-channel-admission.ts'
 
 const roots: string[] = []
 
@@ -33,9 +34,10 @@ describe('Desktop factory reset', () => {
   it.each([false, true])('drops old preferences before Setup or skip (default directory removed: %s)', async removedDefault => {
     const { root, home } = await fixture()
     const userDataDir = join(root, 'desktop-state')
+    const locations = desktopReleaseUserDataLocations(root, userDataDir)
     const profiles = ['desktop', 'work'].map(name => join(home, 'profiles', name))
     const unrelated = join(root, 'other-home', 'profiles', 'desktop')
-    const versions = { desktopVersion: '2.0.5-beta.2', dshVersion: '0.1.3-alpha.2', setupRevision: 1 }
+    const versions = { desktopVersion: '2.0.6-beta.1', dshVersion: '0.1.3-alpha.2', setupRevision: 1 }
     const oldPreferences = {
       mode: 'advanced' as const,
       openBrowser: false,
@@ -53,6 +55,7 @@ describe('Desktop factory reset', () => {
       mkdirSync(profile, { recursive: true })
       await writeDesktopProfilePreferences(userDataDir, profile, oldPreferences)
       await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'completed', versions)
+      await completeOrSkipDesktopSetupWizard(locations.other.userDataDir, profile, 'skipped', versions)
     }
     await selectDesktopMarketProvider(userDataDir, oldPreferences.market)
     const pluginStatePath = join(userDataDir, 'plugin-management', 'state.json')
@@ -71,11 +74,13 @@ describe('Desktop factory reset', () => {
       userDataDir,
       protectedPaths: [root],
       trashItem: async path => { await rename(path, join(root, 'trashed-dsh')) },
+      clearProfileUsageHistory: profileDir => { clearDesktopProfileUsageHistory(locations, profileDir) },
     })
 
     for (const profile of profiles) {
       expect(readDesktopProfilePreferences(userDataDir, profile)).toBeUndefined()
       expect(readDesktopSetupWizardState(userDataDir, profile)).toBeUndefined()
+      expect(readDesktopSetupWizardState(locations.other.userDataDir, profile)).toBeUndefined()
       const settings = join(profile, 'settings.yaml')
       const defaults = readDesktopSetupWizardSettings(settings)
       expect(defaults.mode).toBe('compatibility')
@@ -89,6 +94,7 @@ describe('Desktop factory reset', () => {
     expect([...readDesktopDisabledBundles(pluginStatePath, 'unrelated')]).toEqual(['third-party-plugin'])
     expect(readDesktopProfilePreferences(userDataDir, unrelated)).toMatchObject(oldPreferences)
     expect(readDesktopSetupWizardState(userDataDir, unrelated)?.outcome).toBe('completed')
+    expect(readDesktopSetupWizardState(locations.other.userDataDir, unrelated)?.outcome).toBe('skipped')
   })
 
   it('preserves external settings when moving the data directory to trash fails', async () => {
@@ -97,7 +103,7 @@ describe('Desktop factory reset', () => {
     const profile = join(home, 'profiles', 'desktop')
     await selectDesktopMarketProvider(userDataDir, 'community-market')
     await completeOrSkipDesktopSetupWizard(userDataDir, profile, 'completed', {
-      desktopVersion: '2.0.5-beta.2', dshVersion: '0.1.3-alpha.2', setupRevision: 1,
+      desktopVersion: '2.0.6-beta.1', dshVersion: '0.1.3-alpha.2', setupRevision: 1,
     })
 
     await expect(resetDesktopDataDirectory({

@@ -401,8 +401,8 @@ describe('published package surface', () => {
     expect(config).toContain("diagnostics: 'src/diagnostics.ts'")
     expect(config).toContain("notifications: 'src/notifications.ts'")
     expect(config).toContain("'diagnostic-export-worker': 'src/diagnostic-export-worker.ts'")
-    expect(config).toContain("preload: 'src/preload.ts', 'compatibility-preload': 'src/compatibility-preload.ts'")
-    expect(config).toContain("entryFileNames: '[name].cjs'")
+    expect(config).toContain("entry: { preload: 'src/preload.ts' }")
+    expect(config).toContain("entryFileNames: 'preload.cjs'")
     expect(config).toContain("terminal: 'src/terminal.ts'")
     expect(config).toContain("'update-download': 'src/update-download.ts'")
     expect(config).toContain("updates: 'src/updates.ts'")
@@ -414,6 +414,15 @@ describe('published package surface', () => {
 
     expect(config).toContain("'process.env.NODE_ENV': JSON.stringify('production')")
     expect(client).not.toMatch(/\bprocess(?:\.|\[)/u)
+  })
+
+  it('excludes beta-only isolated compatibility chrome from stable build inputs and output', () => {
+    const config = readFileSync(new URL('tsdown.config.ts', packageRoot), 'utf8')
+    const nativeConfig = readFileSync(new URL('vite.native-ui.config.ts', packageRoot), 'utf8')
+    expect(config).not.toContain('compatibility-preload')
+    expect(nativeConfig).not.toContain('compatibility-chrome')
+    expect(readdirSync(new URL('lib/', packageRoot))).not.toContain('compatibility-preload.cjs')
+    expect(readdirSync(new URL('lib/native-ui/', packageRoot))).not.toContain('compatibility-chrome.html')
   })
 
   it('installs Host command PATHs after the launch snapshot and before profile boot', () => {
@@ -560,6 +569,9 @@ describe('published package surface', () => {
     const prepare = main.indexOf('let prepared = prepareDesktopProfile(')
     const setupState = main.indexOf('readDesktopSetupWizardState(', prepare)
     const setupWindow = main.indexOf('new DesktopSetupWizardWindow({', setupState)
+    const usageHistory = main.indexOf('!hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName)', setupState)
+    expect(usageHistory).toBeGreaterThan(setupState)
+    expect(setupWindow).toBeGreaterThan(usageHistory)
     const setupRun = main.indexOf('await setupWizardWindow.run()', setupWindow)
     const skipBranch = main.indexOf("if (setupResult.action === 'skip')", setupRun)
     const completeBranch = main.indexOf('} else {', skipBranch)
@@ -753,7 +765,7 @@ describe('published package surface', () => {
 
   it('fixes the installed application identity', () => {
     expect(workspaceManifest.version).toBeUndefined()
-    expect(manifest.version).toBe('2.0.5')
+    expect(manifest.version).toBe('2.0.6')
     expect(manifest.build?.productName).toBe('DSH Desktop')
     expect(manifest.build?.appId).toBe('ai.deepseek.dsh.desktop')
     expect(manifest.build?.asar).toEqual({ smartUnpack: true })

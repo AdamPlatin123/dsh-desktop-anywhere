@@ -55,11 +55,7 @@ import {
   desktopLoopbackBrowserUrl,
 } from './desktop-network.ts'
 import { desktopLanAddresses } from './lan-addresses.ts'
-import {
-  createLanHttpsCertificate,
-  DesktopLanHttpsCertificateError,
-  type DesktopLanHttpsPrivateKeyProtector,
-} from './lan-https-certificate.ts'
+import type { DesktopLanHttpsPrivateKeyProtector } from './lan-https-certificate.ts'
 import {
   DESKTOP_LAN_HTTPS_CA_PATH,
   DesktopLanHttpsRuntime,
@@ -147,6 +143,7 @@ import { showDesktopDialog } from './desktop-dialog-window.ts'
 import {
   clearDesktopProfileUsageHistory,
   desktopReleaseUserDataLocations,
+  hasDesktopProfileUsageHistory,
   inspectDesktopProfileChannelAdmission,
 } from './profile-channel-admission.ts'
 import {
@@ -988,6 +985,7 @@ async function start(): Promise<void> {
                 process.cwd(),
               ],
               trashItem: async path => { await shell.trashItem(path) },
+              clearProfileUsageHistory: profileDir => { clearDesktopProfileUsageHistory(releaseUserDataLocations, profileDir) },
             })
           } finally {
             lease.release()
@@ -1205,7 +1203,8 @@ async function start(): Promise<void> {
     const setupWizardState = safeModePaths === undefined
       ? readDesktopSetupWizardState(marketUserDataDir, prepared.profile.dir)
       : undefined
-    if (safeModePaths === undefined && desktopSetupWizardRequired(setupWizardState, setupWizardVersions)) {
+    if (safeModePaths === undefined && desktopSetupWizardRequired(setupWizardState, setupWizardVersions)
+      && !hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName)) {
       const setupSettings = readDesktopSetupWizardSettings(prepared.settingsDocument)
       setupWizardWindow = new DesktopSetupWizardWindow({
         locale: desktopLocaleFromLanguageTag(app.getLocale()),
@@ -1344,30 +1343,26 @@ async function start(): Promise<void> {
         `${BIN_NAME}: requested Market provider ${prepared.market.requested} was disabled for this generation: ${prepared.marketFailure}`,
       )
     }
-    let lanHttpsCertificate: Awaited<ReturnType<typeof createLanHttpsCertificate>> | undefined
-    let lanHttpsFailureCode: string | undefined
-    if (prepared.lanAddresses.length === 0) {
-      lanHttpsFailureCode = 'no-address'
-    } else {
-      try {
-        lanHttpsCertificate = await createLanHttpsCertificate(
-          marketUserDataDir,
-          prepared.lanAddresses,
-          desktopLanHttpsPrivateKeyProtector(),
-        )
-      } catch (cause) {
-        lanHttpsFailureCode = cause instanceof DesktopLanHttpsCertificateError
-          ? cause.code
-          : 'certificate-state'
-        electronLogger.error(
-          `${BIN_NAME}: LAN HTTPS certificate setup is unavailable: ${cause instanceof Error ? cause.message : String(cause)}`,
-        )
-      }
-    }
     const lanHttps = new DesktopLanHttpsRuntime({
       addresses: prepared.lanAddresses,
-      ...(lanHttpsCertificate === undefined ? {} : { certificate: lanHttpsCertificate }),
-      ...(lanHttpsFailureCode === undefined ? {} : { failureCode: lanHttpsFailureCode }),
+      prepareCertificate: async () => {
+        if (prepared.lanAddresses.length === 0) return { failureCode: 'no-address' }
+        const { createLanHttpsCertificate, DesktopLanHttpsCertificateError } = await import('./lan-https-certificate.ts')
+        try {
+          const certificate = await createLanHttpsCertificate(
+            marketUserDataDir,
+            prepared.lanAddresses,
+            desktopLanHttpsPrivateKeyProtector(),
+          )
+          return { certificate }
+        } catch (cause) {
+          const failureCode = cause instanceof DesktopLanHttpsCertificateError ? cause.code : 'certificate-state'
+          electronLogger.error(
+            `${BIN_NAME}: LAN HTTPS certificate setup is unavailable: ${cause instanceof Error ? cause.message : String(cause)}`,
+          )
+          return { failureCode }
+        }
+      },
       requestedPort: 0,
     })
     const browserAccess = createDesktopBrowserAccess(

@@ -23,6 +23,8 @@ export class CompatibilityShell {
   readonly chromeView: WebContentsView
   private expanded = false
   private readonly chrome: WebContents
+  private contentBounds: Electron.Rectangle | undefined
+  private chromeBounds: Electron.Rectangle | undefined
 
   constructor(
     private readonly window: BrowserWindow,
@@ -45,10 +47,15 @@ export class CompatibilityShell {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
+      // Keep the embedded Windows renderer painting while minimized. Its
+      // compositor is separate from the native window and transparent chrome.
+      ...(platform === 'win32' ? { backgroundThrottling: false } : {}),
     } })
     window.contentView.addChildView(this.content)
     window.contentView.addChildView(this.chromeView)
     window.on('resize', this.resize)
+    window.on('restore', this.resize)
+    window.on('show', this.resize)
     window.on('enter-full-screen', this.resize)
     window.on('leave-full-screen', this.resize)
     window.on('closed', this.dispose)
@@ -90,9 +97,21 @@ export class CompatibilityShell {
 
   private readonly resize = (): void => {
     if (this.disposed || this.window.isDestroyed()) return
+    if (this.platform === 'win32' && this.window.isMinimized()) return
     const [width = 0, height = 0] = this.window.getContentSize()
-    this.content.setBounds({ x: 0, y: DESKTOP_FRAME_HEIGHT, width, height: Math.max(0, height - DESKTOP_FRAME_HEIGHT) })
-    this.chromeView.setBounds({ x: 0, y: 0, width, height: this.expanded ? height : Math.min(height, DESKTOP_FRAME_HEIGHT) })
+    // Minimize/restore can expose a transient empty client area. Retain the
+    // last usable surface until restore/show supplies the real dimensions.
+    if (this.platform === 'win32' && (width <= 0 || height <= DESKTOP_FRAME_HEIGHT)) return
+    const contentBounds = { x: 0, y: DESKTOP_FRAME_HEIGHT, width, height: Math.max(0, height - DESKTOP_FRAME_HEIGHT) }
+    const chromeBounds = { x: 0, y: 0, width, height: this.expanded ? height : Math.min(height, DESKTOP_FRAME_HEIGHT) }
+    if (!sameBounds(this.contentBounds, contentBounds)) {
+      this.content.setBounds(contentBounds)
+      this.contentBounds = contentBounds
+    }
+    if (!sameBounds(this.chromeBounds, chromeBounds)) {
+      this.chromeView.setBounds(chromeBounds)
+      this.chromeBounds = chromeBounds
+    }
   }
 
   private readonly preventNavigation = (event: Electron.Event): void => { event.preventDefault() }
@@ -130,6 +149,8 @@ export class CompatibilityShell {
     this.window.off('blur', this.dismiss)
     this.window.off('hide', this.dismiss)
     this.window.off('resize', this.resize)
+    this.window.off('restore', this.resize)
+    this.window.off('show', this.resize)
     this.window.off('enter-full-screen', this.resize)
     this.window.off('leave-full-screen', this.resize)
     this.window.off('closed', this.dispose)
@@ -148,4 +169,9 @@ export class CompatibilityShell {
     if (!this.chrome.isDestroyed()) this.chrome.close({ waitForBeforeUnload: false })
     if (!this.webContents.isDestroyed()) this.webContents.close({ waitForBeforeUnload: false })
   }
+}
+
+function sameBounds(previous: Electron.Rectangle | undefined, next: Electron.Rectangle): boolean {
+  return previous !== undefined && previous.x === next.x && previous.y === next.y
+    && previous.width === next.width && previous.height === next.height
 }
