@@ -86,7 +86,7 @@ const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
     aaDisabled: 'Keep Agents Anywhere disabled',
     aaDisabledBody: 'Keep phone connection turned off.',
     aaEnabled: 'Enable Agents Anywhere',
-    aaEnabledBody: 'Enable the AA plugin. Connecting a device requires uv and Python 3.12+.',
+    aaEnabledBody: 'Enable the AA plugin.',
 
     beta: 'Beta',
     title: 'Set up DSH Desktop',
@@ -163,7 +163,7 @@ const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
     aaDisabled: '不启用 Agents Anywhere',
     aaDisabledBody: '保持手机连接功能关闭。',
     aaEnabled: '启用 Agents Anywhere',
-    aaEnabledBody: '启用 AA 插件。连接设备需要 uv 和 Python 3.12+。',
+    aaEnabledBody: '启用 AA 插件。',
 
     beta: 'Beta',
     title: '设置 DSH Desktop',
