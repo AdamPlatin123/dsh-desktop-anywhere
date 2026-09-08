@@ -1,6 +1,6 @@
 /** Headless smoke for the complete published DSH Web profile and renderer manifest. */
 
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -58,7 +58,7 @@ try {
     '  default: minimal',
     '',
   ].join('\n'))
-  const prepared = prepareDesktopProfile('1', home, 'win32')
+  const prepared = prepareDesktopProfile('1', home, 'win32', undefined, undefined, undefined, { aaEnabled: process.env.DSH_VERIFY_AA === '1' })
   const hostServicePluginDir = join(
     prepared.profile.dir,
     'node_modules',
@@ -311,6 +311,20 @@ try {
   }
   const graph = JSON.parse(bootMatch[1])
   const ids = new Set(graph.entries.map(entry => entry.id))
+  const aaEnabled = process.env.DSH_VERIFY_AA === '1'
+  if (ids.has('@agents-anywhere/dsh-bridge-next') !== aaEnabled) throw new Error('AA client graph does not match explicit selection')
+  if (aaEnabled && (!ctx.get('agentsAnywhereRuntime') || !ctx.get('agentsAnywhereOnboarding'))) {
+    throw new Error('AA Host services did not activate in the actual Desktop profile')
+  }
+  if (aaEnabled) {
+    const endpoint = join(prepared.profile.dir, 'agents-anywhere', 'runtime', 'agents-anywhere', 'bridge', 'endpoint.json')
+    if (!existsSync(endpoint)) throw new Error('AA did not publish its Profile-specific Connector endpoint')
+    if (existsSync(join(home, 'agents-anywhere', 'bridge', 'endpoint.json'))) {
+      throw new Error('AA exposed this Profile to a Connector paired through the shared DSH home')
+    }
+    const snapshot = await ctx.get('agentsAnywhereOnboarding').inspect()
+    if (snapshot.account) throw new Error('A fresh Profile inherited an AA account')
+  }
   for (const id of [
     'dsh-plugin-desktop-beta',
     '@deepseek-ai/dsh-client-file-upload',

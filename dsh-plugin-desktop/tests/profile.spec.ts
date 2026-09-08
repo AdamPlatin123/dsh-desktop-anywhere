@@ -1217,3 +1217,44 @@ virtualStoreDirMaxLength: 60
     expect(rows.map(row => row.id)).not.toContain('desktop-windows-subprocess')
   })
 })
+
+describe('bundled Agents Anywhere', () => {
+  it('loads the shipped bundle only after explicit opt-in, with Profile data and physical Connector paths', () => {
+    const home = temporaryHome()
+    const disabled = prepareDesktopProfile('1', home)
+    expect(disabled.aaEnabled).toBe(false)
+    expect(composeEntries([disabled.patches]).some(row => row.name === '@agents-anywhere/dsh-bridge-next')).toBe(false)
+    const enabled = prepareDesktopProfile('1', home, process.platform, undefined, undefined, undefined, { aaEnabled: true })
+    const aa = composeEntries([enabled.patches]).filter(row => row.name === '@agents-anywhere/dsh-bridge-next' && !row.disabled)
+    expect(aa).toHaveLength(1)
+    expect(aa[0]?.config).toMatchObject({ dshHome: join(enabled.profile.dir, 'agents-anywhere', 'runtime'), stateRoot: join(enabled.profile.dir, 'agents-anywhere') })
+    const config = aa[0]?.config as { connectorSourceDir: string }
+    expect(readFileSync(join(config.connectorSourceDir, 'pyproject.toml'), 'utf8')).toContain('anywhere-cli')
+    expect(prepareDesktopProfile('1', home).aaEnabled).toBe(false)
+  })
+  it('isolates Connector discovery as well as account storage when switching Profiles', () => {
+    const home = temporaryHome()
+    const template = PROFILE_TEMPLATES.web!
+    const configs = ['first', 'second'].map(name => {
+      initProfile(join(home, 'profiles', name), template.bundles, template.patchReload)
+      const prepared = prepareDesktopProfile('1', home, process.platform, name, undefined, undefined, { aaEnabled: true })
+      return composeEntries([prepared.patches]).find(row => row.name === '@agents-anywhere/dsh-bridge-next' && !row.disabled)!.config as { dshHome: string, stateRoot: string }
+    })
+    const first = configs[0]!
+    const second = configs[1]!
+    mkdirSync(first.stateRoot, { recursive: true })
+    writeFileSync(join(first.stateRoot, 'account.json'), '{"userId":"first-profile-only"}')
+    expect(existsSync(join(second.stateRoot, 'account.json'))).toBe(false)
+    expect(second.dshHome).not.toBe(first.dshHome)
+    for (const config of configs) {
+      expect(config.dshHome).not.toBe(home)
+      expect(config.dshHome).toBe(join(config.stateRoot, 'runtime'))
+    }
+  })
+  it('does not let a user patch enable AA while Desktop selection is off', () => {
+    const home = temporaryHome()
+    writeFileSync(join(home, 'cordis.patch.yml'), '- insert:\n    - id: custom-aa\n      name: "@agents-anywhere/dsh-bridge-next"\n')
+    const prepared = prepareDesktopProfile('1', home)
+    expect(composeEntries([prepared.patches]).filter(row => row.name === '@agents-anywhere/dsh-bridge-next').every(row => row.disabled)).toBe(true)
+  })
+})

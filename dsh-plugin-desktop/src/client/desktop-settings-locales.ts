@@ -1,6 +1,15 @@
 /** Desktop-owned settings copy. */
 
 export const zh = {
+  aaSaving: '正在保存 Agents Anywhere 选项…',
+  aaSaveFailed: '未能保存 Agents Anywhere 选项，请重试。',
+  aaSaved: 'Agents Anywhere 选项已保存。',
+  aaTitle: 'Agents Anywhere',
+  aaIntro: '连接手机和 Web，远程使用本机 DSH。启用后从侧栏“手机连接”完成登录。',
+  aaDisabled: '不启用 Agents Anywhere',
+  aaDisabledBody: '保持手机连接功能关闭。',
+  aaEnabled: '启用 Agents Anywhere',
+  aaEnabledBody: '启用 AA 插件。连接设备需要 uv 和 Python 3.12+。',
   beta: 'Beta',
   nav: '桌面设置',
   title: 'DSH Desktop 设置',
@@ -109,6 +118,15 @@ export const zh = {
 export type DesktopSettingsLocaleKey = keyof typeof zh
 
 export const en: Record<DesktopSettingsLocaleKey, string> = {
+  aaSaving: 'Saving Agents Anywhere preference…',
+  aaSaveFailed: 'Could not save Agents Anywhere preference. Please try again.',
+  aaSaved: 'Agents Anywhere preference saved.',
+  aaTitle: 'Agents Anywhere',
+  aaIntro: 'Connect your phone and Web to this DSH. After enabling, sign in from Phone connection in the sidebar.',
+  aaDisabled: 'Keep Agents Anywhere disabled',
+  aaDisabledBody: 'Keep phone connection turned off.',
+  aaEnabled: 'Enable Agents Anywhere',
+  aaEnabledBody: 'Enable the AA plugin. Connecting a device requires uv and Python 3.12+.',
   beta: 'Beta',
   nav: 'Desktop settings',
   title: 'DSH Desktop settings',

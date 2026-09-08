@@ -95,6 +95,7 @@ import { acquireDesktopDataOperationLock } from './desktop-data-operation-lock.t
 import { resetDesktopDataDirectory } from './desktop-factory-reset.ts'
 import {
   clearDesktopProfilePreferences,
+  desktopProfilePreferencesFromSettings,
   readDesktopProfilePreferences,
   writeDesktopProfilePreferences,
   type DesktopProfilePreferences,
@@ -331,21 +332,6 @@ function desktopProfileMarketSnapshot(market: DesktopMarketProvider): DesktopMar
     requested: market,
     effective: market,
     legacyDefaulted: false,
-  })
-}
-
-/** Project exactly the first-stage Profile fields from an effective settings view. */
-function desktopProfilePreferencesFromSettings(
-  desktop: Pick<DesktopSettings, 'mode' | 'openBrowser' | 'networkExposure'>,
-  notifications: Readonly<DesktopNotificationSettings>,
-  market: DesktopMarketProvider,
-): DesktopProfilePreferences {
-  return Object.freeze({
-    mode: desktop.mode,
-    openBrowser: desktop.openBrowser,
-    networkExposure: desktop.networkExposure,
-    notifications: Object.freeze({ ...notifications }),
-    market,
   })
 }
 
@@ -1086,6 +1072,7 @@ async function start(): Promise<void> {
       ? legacyMarketSelection
       : desktopProfileMarketSnapshot(profilePreferences.market)
     const preparationHooks = {
+      get aaEnabled() { return safeModePaths === undefined && profilePreferences?.aaEnabled === true },
       lanAddresses,
       onSettingsDocumentResolved: (settingsDocument: string) => {
         if (startupRecoveryConfigurationPaths === undefined) return
@@ -1116,6 +1103,7 @@ async function start(): Promise<void> {
           safeModeDefaults.settings,
           safeModeDefaults.settings.notifications,
           safeModeDefaults.market,
+          safeModeDefaults.aaEnabled,
         ),
       )
       prepared = prepareDesktopProfile(
@@ -1214,6 +1202,7 @@ async function start(): Promise<void> {
           micaSupported: process.platform === 'win32' && windowsSupportsMica(runtime.windowsBuild),
           ...setupSettings,
           market: marketSelection.requested,
+          aaEnabled: profilePreferences?.aaEnabled === true,
         },
       })
       let setupResult: DesktopSetupWizardResult
@@ -1229,6 +1218,12 @@ async function start(): Promise<void> {
         return
       }
       if (setupResult.action === 'skip') {
+        profilePreferences = await writeDesktopProfilePreferences(marketUserDataDir, prepared.profile.dir, {
+          ...desktopProfilePreferencesFromSettings(setupSettings, setupSettings.notifications, marketSelection.requested),
+          aaEnabled: false,
+        })
+        prepared = prepareDesktopProfile(process.env.DSH_TELEMETRY_DISABLED, homeDir, process.platform,
+          activeProfileName, pluginManagementStatePath, marketSelection, preparationHooks)
         await completeOrSkipDesktopSetupWizard(
           marketUserDataDir,
           prepared.profile.dir,
@@ -1243,6 +1238,7 @@ async function start(): Promise<void> {
             setupResult.selection,
             setupResult.selection.notifications,
             setupResult.selection.market,
+            setupResult.selection.aaEnabled === true,
           ),
         )
         await updateDesktopSetupWizardSettings(prepared.settingsDocument, {
@@ -1521,6 +1517,15 @@ async function start(): Promise<void> {
         hostCtx.provide('desktopSettingsController', new DesktopSettingsController({
           profiles: hostCtx.desktopProfiles,
           readMarket,
+          readAa: () => ({ requested: currentProfilePreferences.aaEnabled === true, effective: prepared.aaEnabled }),
+          selectAa: async enabled => {
+            await enqueueProfilePreferencesWrite(current => desktopProfilePreferencesFromSettings(
+              current,
+              current.notifications,
+              current.market,
+              enabled,
+            ))
+          },
           readWeb: () => {
             const lan = lanHttps.snapshot()
             const lanOrigins = lan.state === 'ready' && lan.actualPort !== null
@@ -1544,6 +1549,7 @@ async function start(): Promise<void> {
               current,
               current.notifications,
               provider,
+              current.aaEnabled === true,
             ))
             return desktopMarketSnapshotWithEffective(
               await selectDesktopMarketProvider(marketUserDataDir, provider),
@@ -1592,6 +1598,7 @@ async function start(): Promise<void> {
           ? next as DesktopNotificationSettings
           : ctx.settings.get(DESKTOP_NOTIFICATIONS_SETTINGS_NAMESPACE) as DesktopNotificationSettings,
         current.market,
+        current.aaEnabled === true,
       ))
       void write.catch((cause: unknown) => {
         ctx.logger.error(

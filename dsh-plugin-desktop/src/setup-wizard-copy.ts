@@ -3,6 +3,12 @@
 import type { DesktopLocale } from './runtime.ts'
 
 export interface DesktopSetupWizardCopy {
+  readonly aaTitle: string
+  readonly aaIntro: string
+  readonly aaDisabled: string
+  readonly aaDisabledBody: string
+  readonly aaEnabled: string
+  readonly aaEnabledBody: string
   readonly beta: string
   readonly title: string
   readonly profile: string
@@ -75,6 +81,13 @@ export interface DesktopSetupWizardCopy {
 
 const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
   en: {
+    aaTitle: 'Agents Anywhere',
+    aaIntro: 'Connect your phone and Web to this DSH. After enabling, sign in from Phone connection in the sidebar.',
+    aaDisabled: 'Keep Agents Anywhere disabled',
+    aaDisabledBody: 'Keep phone connection turned off.',
+    aaEnabled: 'Enable Agents Anywhere',
+    aaEnabledBody: 'Enable the AA plugin. Connecting a device requires uv and Python 3.12+.',
+
     beta: 'Beta',
     title: 'Set up DSH Desktop',
     profile: 'Profile',
@@ -145,6 +158,13 @@ const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
     invalidState: 'Setup information could not be loaded. Close this window and try again.',
   },
   zh: {
+    aaTitle: 'Agents Anywhere',
+    aaIntro: '连接手机和 Web，远程使用本机 DSH。启用后从侧栏“手机连接”完成登录。',
+    aaDisabled: '不启用 Agents Anywhere',
+    aaDisabledBody: '保持手机连接功能关闭。',
+    aaEnabled: '启用 Agents Anywhere',
+    aaEnabledBody: '启用 AA 插件。连接设备需要 uv 和 Python 3.12+。',
+
     beta: 'Beta',
     title: '设置 DSH Desktop',
     profile: 'Profile',

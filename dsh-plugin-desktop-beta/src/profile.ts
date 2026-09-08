@@ -87,6 +87,8 @@ export { DESKTOP_PACKAGE_NAME } from './product-identity.ts'
 /** Empty include root rewritten before every profile boot. */
 export const DESKTOP_PROFILE_ROOT = 'cordis.yml'
 
+const AA_PACKAGE_NAME = '@agents-anywhere/dsh-bridge-next'
+const AA_ROW_ID = 'agents-anywhere-bridge-next'
 const BIN_NAME = DESKTOP_PACKAGE_NAME
 const REQUIRED_BUNDLES = requiredWebBundles()
 const REQUIRED_BUNDLE_SET = new Set(REQUIRED_BUNDLES)
@@ -292,6 +294,7 @@ export interface PreparedDesktopProfile {
   settingsDocument: string
   /** Requested provider and the fail-closed provider effective for this generation. */
   market: DesktopMarketSnapshot
+  aaEnabled: boolean
   /** Internal boot diagnostic when the requested provider was disabled. */
   marketFailure?: string
   /** Whether packaged pnpm must rebuild a legacy Profile dependency layout. */
@@ -300,6 +303,9 @@ export interface PreparedDesktopProfile {
 
 /** Optional observations emitted before profile preparation can fail. */
 export interface DesktopProfilePreparationHooks {
+  /** Explicit Profile choice; false also enforces safe-mode exclusion. */
+  aaEnabled?: boolean
+
   /** Receive the trusted settings path before its contents are parsed. */
   onSettingsDocumentResolved?: (path: string) => void
   /** LAN IPv4 literals sampled once before this profile generation is composed. */
@@ -507,6 +513,7 @@ function loadRecoveryFilteredProfile(
   }
   const patchReload = rawPatchReload ?? PROFILE_TEMPLATES[profileName]?.patchReload ?? DEFAULT_PROFILE_PATCH_RELOAD
   const selectedBundles = bundles.filter(packageName =>
+    packageName !== AA_PACKAGE_NAME &&
     packageName !== DESKTOP_MARKET_IDENTITIES.community.packageName
     && (marketProvider === DESKTOP_MARKET_IDENTITIES.dshMarket.provider
       || packageName !== DESKTOP_MARKET_IDENTITIES.dshMarket.packageName),
@@ -932,6 +939,30 @@ export function prepareDesktopProfile(
     ...filteredProfile.patches,
     ...filteredHome.patches,
   ]
+  for (const row of composeEntries([patches])) {
+    if (row.name === AA_PACKAGE_NAME || row.name?.startsWith(`${AA_PACKAGE_NAME}/`) || row.id === AA_ROW_ID) {
+      if (typeof row.id !== 'string') throw new Error(`${BIN_NAME}: AA entries require a stable id`)
+      patches.push({ id: row.id, disabled: true })
+    }
+  }
+  if (hooks.aaEnabled === true) {
+    const packageDir = dirname(createRequire(INSTALL_ANCHOR).resolve(`${AA_PACKAGE_NAME}/package.json`))
+    const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as { dsh?: { bundle?: { patch?: string } } }
+    if (manifest.dsh?.bundle?.patch !== './cordis.patch.yml') throw new Error(`${BIN_NAME}: invalid AA bundle manifest`)
+    const aaRows = composeEntries([loadOverlayPatches(BIN_NAME, join(packageDir, 'cordis.patch.yml'))])
+    if (aaRows.length !== 1 || aaRows[0]?.id !== AA_ROW_ID || aaRows[0]?.name !== AA_PACKAGE_NAME) {
+      throw new Error(`${BIN_NAME}: invalid AA bundle identity`)
+    }
+    // Python runs outside Electron and must receive a physical path outside ASAR.
+    const connectorSourceDir = join(packageDir, 'lib', 'bundled-connector').replace(/([\\/])app\.asar([\\/])/u, '$1app.asar.unpacked$2')
+    patches.push({ insert: [{ ...aaRows[0], disabled: false, config: {
+      // AA uses dshHome for endpoint discovery and passes it to its Connector.
+      // Sharing the real home lets an already paired Connector attach to a
+      // different Profile before that Profile has authorized its own device.
+      ...rowConfig(aaRows[0]), dshHome: join(profileDir, 'agents-anywhere', 'runtime'),
+      stateRoot: join(profileDir, 'agents-anywhere'), connectorSourceDir,
+    } }] })
+  }
   const composedRows = composeEntries([patches])
   assertUniqueEntryIds(composedRows)
   assertEffectiveMarketRows(composedRows, effectiveMarket)
@@ -1136,6 +1167,7 @@ export function prepareDesktopProfile(
     networkExposure,
     lanAddresses,
     settingsDocument,
+    aaEnabled: hooks.aaEnabled === true,
     market: desktopMarketSnapshotWithEffective(marketSelection, effectiveMarket),
     requiresDependencyMigration,
     ...(marketFailure === undefined ? {} : { marketFailure }),
