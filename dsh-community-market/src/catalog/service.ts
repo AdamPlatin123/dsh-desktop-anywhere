@@ -604,14 +604,27 @@ export class DefaultCatalogService implements CatalogService {
    * evicted key cannot have an active scan.
    */
   private evictCatalogScanCache(): void {
-    for (const key of this.catalogScanCache.keys()) {
+    for (const [key, entry] of this.catalogScanCache) {
       if (this.catalogScanCache.size <= this.maxScanCacheEntries) return
       this.catalogScanCache.delete(key)
+      // Paging cursors were validated against the evicted scan's source
+      // generation, and eviction keeps the generation counter (a forced
+      // refresh would bump it). A rebuilt catalog can therefore differ in
+      // content while an old cursor still validates, silently paging across
+      // the rebuild boundary. Revoking the source's cursors trades a
+      // client-visible pagination restart for cross-version correctness.
+      this.revokeSourceCursors(entry.sourceRecordId)
       const controllers = this.catalogScanControllers.get(key)
       if (controllers === undefined || controllers.size === 0) {
         this.catalogScanControllers.delete(key)
-        this.catalogScanGates.delete(key)
       }
+      // The gate is kept: a request can already hold it while queued for the
+      // global source-concurrency permit, with no controller registered yet.
+      // Deleting the gate here would let the next request create a second
+      // gate and run two rebuilds of the same catalog concurrently, the
+      // later-arriving older result overwriting the newer one. Idle gate
+      // objects are a few dozen bytes per (source, locale) key, the same
+      // standing cost as the retained generation counters.
     }
   }
 
