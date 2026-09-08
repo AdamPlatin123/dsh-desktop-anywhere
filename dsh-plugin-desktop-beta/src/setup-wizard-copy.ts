@@ -9,6 +9,9 @@ export interface DesktopSetupWizardCopy {
   readonly aaDisabledBody: string
   readonly aaEnabled: string
   readonly aaEnabledBody: string
+  readonly aaNextTitle: string
+  readonly aaNextBody: string
+  readonly aaNextDesktop: string
   readonly beta: string
   readonly title: string
   readonly profile: string
@@ -81,12 +84,15 @@ export interface DesktopSetupWizardCopy {
 
 const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
   en: {
-    aaTitle: 'Agents Anywhere',
-    aaIntro: 'Connect your phone and Web to this DSH. After enabling, sign in from Phone connection in the sidebar.',
-    aaDisabled: 'Keep Agents Anywhere disabled',
+    aaTitle: 'Agents-Anywhere',
+    aaIntro: 'Access this DSH from your phone and Web through the bundled dsh-bridge-next plugin.',
+    aaDisabled: 'Keep Agents-Anywhere disabled',
     aaDisabledBody: 'Keep phone connection turned off.',
-    aaEnabled: 'Enable Agents Anywhere',
-    aaEnabledBody: 'Enable the AA plugin.',
+    aaEnabled: 'Enable Agents-Anywhere',
+    aaEnabledBody: 'After enabling, open Phone connection in the sidebar to complete setup.',
+    aaNextTitle: 'Next: sign in and connect',
+    aaNextBody: 'Use the arrow at the bottom right to continue. After finishing setup, open Phone connection in the main sidebar to sign in and configure the service address and connection options.',
+    aaNextDesktop: 'If an Agents-Anywhere desktop app is detected, manage the connection in that app.',
 
     beta: 'Beta',
     title: 'Set up DSH Desktop',
@@ -158,12 +164,15 @@ const COPY: Record<DesktopLocale, DesktopSetupWizardCopy> = {
     invalidState: 'Setup information could not be loaded. Close this window and try again.',
   },
   zh: {
-    aaTitle: 'Agents Anywhere',
-    aaIntro: '连接手机和 Web，远程使用本机 DSH。启用后从侧栏“手机连接”完成登录。',
-    aaDisabled: '不启用 Agents Anywhere',
+    aaTitle: 'Agents-Anywhere',
+    aaIntro: '通过内置插件 dsh-bridge-next，在手机和 Web 上访问本机 DSH。',
+    aaDisabled: '不启用 Agents-Anywhere',
     aaDisabledBody: '保持手机连接功能关闭。',
-    aaEnabled: '启用 Agents Anywhere',
-    aaEnabledBody: '启用 AA 插件。',
+    aaEnabled: '启用 Agents-Anywhere',
+    aaEnabledBody: '启用后，从侧栏“手机连接”完成设置。',
+    aaNextTitle: '下一步：登录并连接',
+    aaNextBody: '点击右下角箭头继续。完成设置后，在主界面侧栏打开“手机连接”，进行登录并配置服务地址和连接选项。',
+    aaNextDesktop: '如果检测到已安装 Agents-Anywhere 桌面端，请在 AA 桌面端管理连接。',
 
     beta: 'Beta',
     title: '设置 DSH Desktop',

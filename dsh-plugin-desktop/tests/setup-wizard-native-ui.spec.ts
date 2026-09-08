@@ -453,7 +453,7 @@ describe('Setup Wizard native UI boundaries', () => {
 
 it('offers AA opt-in with a Beta badge after the market page', () => {
   const html = renderStep('aa')
-  expect(html).toContain('Agents Anywhere')
+  expect(html).toContain('Agents-Anywhere')
   expect(html).toContain('Beta')
   expect(html).toContain('setup-aa-false')
   expect(html).toContain('setup-aa-true')

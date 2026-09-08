@@ -60,18 +60,17 @@ credential, or device binding is silently copied between the two layouts.
 ## Validation of this pin
 
 The current artifact comes from AA v2 commit
-`f63467318ca72bf3493b29610aed4e293f4dcdb1` and includes the matching Python
-Connector sources. Its Host bundle newly imports `dsh-session`, which is
-explicitly declared as a peer alongside `dsh-llm` and `dsh-typert-protocol`.
+`ae47731c50f02033728faed1ba55f95c8008ec86` and includes the matching Python
+Connector sources. This updates deleted-device recovery during a fresh login,
+Windows discovery (avoiding `os.kill(pid, 0)`), and Windows-safe `pwd` imports.
+The plugin configuration and bundle contracts remain unchanged; `dsh-session`,
+`dsh-llm`, and `dsh-typert-protocol` retain explicit Desktop-compatible peers.
 
 In an isolated source export, TypeScript checking, Host/client builds, build
-artifact and real Client factory DOM checks passed. After installing Python
-dependencies and including the Web test fixtures, all 110 plugin tests passed
-with `--test-concurrency=1`; 55 targeted Connector tests passed. This includes
-controlled Python/backend integration, not an interactive real-model or phone
-acceptance test. The first parallel run encountered incomplete test prerequisites
-and a short RPC timeout assertion; the complete serial run passed without source
-changes.
+artifact and real Client factory DOM checks passed. All 111 plugin tests passed
+with `--test-concurrency=1`; 35 targeted Connector tests passed, including the
+Windows regression tests. This includes controlled Python/backend integration,
+not an interactive real-model, phone, or native Windows acceptance test.
 
 The source is unchanged. Desktop-specific manifest changes and the artifact
 SHA-256 are recorded in `provenance.json`. Desktop validation for this update

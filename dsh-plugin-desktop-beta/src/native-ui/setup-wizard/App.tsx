@@ -458,6 +458,11 @@ export function SetupWizardStepPage({
         title={enabled ? copy.aaEnabled : copy.aaDisabled} body={enabled ? copy.aaEnabledBody : copy.aaDisabledBody}
         {...(enabled ? { badge: copy.beta } : {})} />)}
     </RadioGroup>
+    {selection.aaEnabled === true && <aside className="mt-4 space-y-2 rounded-xl border bg-muted/30 p-4" role="status">
+      <h2 className="text-sm font-semibold">{copy.aaNextTitle}</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">{copy.aaNextBody}</p>
+      <p className="text-xs leading-relaxed text-muted-foreground">{copy.aaNextDesktop}</p>
+    </aside>}
   </Page>
   if (step === 'market') return <Page step={step} subtitle={copy.marketBody} title={copy.marketTitle}><MarketOptions copy={copy} selection={selection} update={update} /></Page>
   if (step === 'notifications') return <Page step={step} subtitle={copy.notificationsBody} title={copy.notificationsTitle}><NotificationOptions copy={copy} notifications={selection.notifications} update={notifications => { update({ ...selection, notifications }) }} /></Page>

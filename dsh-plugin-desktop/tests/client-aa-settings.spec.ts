@@ -67,6 +67,7 @@ describe('AA settings clicks', () => {
     await act(async () => { complete({ accepted: true, restartRequired: true }) })
     expect(enabledChoice(section).getAttribute('aria-checked')).toBe('true')
     expect(section.querySelector('[role="status"]')?.textContent).toBe(zh.restarting)
+    expect(section.textContent).toContain(zh.aaEnabledBody)
   })
 
   it('shows a local error on rejection and lets the same card retry', async () => {
