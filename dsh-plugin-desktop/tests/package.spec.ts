@@ -590,7 +590,8 @@ describe('published package surface', () => {
     expect(setupWindow).toBeGreaterThan(setupState)
     expect(setupRun).toBeGreaterThan(setupWindow)
     expect(skipBranch).toBeGreaterThan(setupRun)
-    expect(main.slice(skipBranch, completeBranch)).not.toContain('writeDesktopProfilePreferences(')
+    expect(main.slice(skipBranch, completeBranch)).toContain('aaEnabled: false')
+    expect(main.slice(skipBranch, completeBranch)).toContain('writeDesktopProfilePreferences(')
     expect(profilePreferences).toBeGreaterThan(completeBranch)
     expect(updateSettings).toBeGreaterThan(profilePreferences)
     expect(selectMarket).toBeGreaterThan(updateSettings)
@@ -607,8 +608,9 @@ describe('published package surface', () => {
 
   it('keeps active Profile preferences as the lazy source and serializes runtime mirrors', () => {
     const main = readFileSync(new URL('src/main.ts', packageRoot), 'utf8')
-    const projection = main.indexOf('function desktopProfilePreferencesFromSettings(')
-    const projectionEnd = main.indexOf('function setupSettingsWithProfilePreferences(', projection)
+    const preferencesSource = readFileSync(new URL('src/profile-preferences.ts', packageRoot), 'utf8')
+    const projection = preferencesSource.indexOf('function desktopProfilePreferencesFromSettings(')
+    const projectionEnd = preferencesSource.indexOf('type ErrorFactory', projection)
     const readPreferences = main.indexOf('readDesktopProfilePreferences(marketUserDataDir, activeProfileDir)')
     const profileMarket = main.indexOf('desktopProfileMarketSnapshot(profilePreferences.market)', readPreferences)
     const firstPrepare = main.indexOf('let prepared = prepareDesktopProfile(', profileMarket)
@@ -633,9 +635,13 @@ describe('published package surface', () => {
     const captureNotifications = main.indexOf('namespace !== DESKTOP_NOTIFICATIONS_SETTINGS_NAMESPACE', captureDesktop)
     const captureFailure = main.indexOf('failed to capture active Profile settings', captureNotifications)
 
+    const aaController = main.indexOf('selectAa: async enabled => {')
+    const aaWrite = main.slice(aaController, main.indexOf('readWeb:', aaController))
+    expect(aaWrite).toContain('desktopProfilePreferencesFromSettings(')
+    expect(aaWrite).not.toContain('...current')
     expect(projection).toBeGreaterThanOrEqual(0)
-    const projectionSource = main.slice(projection, projectionEnd)
-    expect(projectionSource).toContain("Pick<DesktopSettings, 'mode' | 'openBrowser' | 'networkExposure'>")
+    const projectionSource = preferencesSource.slice(projection, projectionEnd)
+    expect(projectionSource).toContain("Pick<DesktopProfilePreferences, 'mode' | 'openBrowser' | 'networkExposure'>")
     expect(projectionSource).not.toContain('port:')
     expect(projectionSource).not.toContain('macosMaterial')
     expect(projectionSource).not.toContain('windowsMaterial')
@@ -774,6 +780,7 @@ describe('published package surface', () => {
       'build/app-icon-mac.png',
       'build/tray-iconTemplate.png',
       'build/tray-iconTemplate@2x.png',
+      'node_modules/@agents-anywhere/dsh-bridge-next/lib/bundled-connector/**',
     ])
     const windowsAndLinuxIcons = [
       'build/app-icon.png',
@@ -782,8 +789,8 @@ describe('published package surface', () => {
       'build/tray-icon-blue@1.5x.png',
       'build/tray-icon-blue@2x.png',
     ]
-    expect(manifest.build?.win?.asarUnpack).toEqual(windowsAndLinuxIcons)
-    expect(manifest.build?.linux?.asarUnpack).toEqual(windowsAndLinuxIcons)
+    expect(manifest.build?.win?.asarUnpack).toEqual([...windowsAndLinuxIcons, 'node_modules/@agents-anywhere/dsh-bridge-next/lib/bundled-connector/**'])
+    expect(manifest.build?.linux?.asarUnpack).toEqual([...windowsAndLinuxIcons, 'node_modules/@agents-anywhere/dsh-bridge-next/lib/bundled-connector/**'])
     expect(manifest.build?.electronFuses).toEqual({
       enableEmbeddedAsarIntegrityValidation: true,
       onlyLoadAppFromAsar: true,
