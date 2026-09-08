@@ -191,6 +191,27 @@ describe('Desktop profile health checkpoints', () => {
     expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
   })
 
+  it('propagates network-filesystem blips (ESTALE) instead of self-healing over a good slot', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const proto = DesktopProfileCheckpoint.prototype as unknown as {
+      readSnapshot: (directory: string, requireComplete: boolean) => unknown
+    }
+    const spy = vi.spyOn(proto, 'readSnapshot').mockImplementation(function (this: DesktopProfileCheckpoint) {
+      // ESTALE: the bytes are intact but the NFS-style read failed; a blip
+      // must not mark the slot empty for the next capture to overwrite.
+      const cause = new Error('stale file handle') as NodeJS.ErrnoException
+      cause.code = 'ESTALE'
+      throw cause
+    })
+    try {
+      expect(() => target.checkpoint.listSlots()).toThrow('stale file handle')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
+  })
+
   it('restores an explicitly selected slot and skips exactly the next healthy write', () => {
     let now = Date.parse('2026-08-25T00:00:00.000Z')
     const target = fixture({ now: () => now })

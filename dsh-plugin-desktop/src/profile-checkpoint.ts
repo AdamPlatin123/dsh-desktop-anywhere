@@ -224,8 +224,23 @@ function fail(message: string): never {
   throw new Error(`${BIN_NAME}: ${message}`)
 }
 
-/** errno codes that make a slot unreadable right now without corrupting it. */
-const TRANSIENT_SNAPSHOT_IO_CODES = new Set(['EACCES', 'EBUSY', 'EMFILE', 'EIO', 'EPERM', 'ENFILE'])
+/**
+ * errno codes that make a slot unreadable right now without corrupting it.
+ * ESTALE/ETIMEDOUT/ENOTCONN cover network-filesystem blips where the bytes
+ * are intact but the read failed; treating them as corruption would let a
+ * later capture overwrite a perfectly good backup.
+ */
+const TRANSIENT_SNAPSHOT_IO_CODES = new Set([
+  'EACCES',
+  'EBUSY',
+  'EMFILE',
+  'EIO',
+  'EPERM',
+  'ENFILE',
+  'ESTALE',
+  'ETIMEDOUT',
+  'ENOTCONN',
+])
 
 function isTransientSnapshotIoFailure(cause: unknown): boolean {
   return cause !== null

@@ -917,6 +917,7 @@ async function start(): Promise<void> {
         desktopPackageName: DESKTOP_PACKAGE_NAME,
         releaseChannel: DESKTOP_RELEASE_CHANNEL,
         dshVersion: currentDshVersion,
+        logError: message => { electronLogger.error(message) },
       })
     } catch (cause) {
       electronLogger.error(
@@ -1303,6 +1304,7 @@ async function start(): Promise<void> {
           desktopPackageName: DESKTOP_PACKAGE_NAME,
           releaseChannel: DESKTOP_RELEASE_CHANNEL,
           dshVersion: currentDshVersion,
+          logError: message => { electronLogger.error(message) },
         })
       } catch (cause) {
         electronLogger.error(
