@@ -112,13 +112,15 @@ const electron = vi.hoisted(() => {
     id: 73,
     session: { fetch: sessionFetch, webRequest },
     closeDevTools: vi.fn(() => { devToolsOpened = false }),
-    executeJavaScript: vi.fn(async (_code: string, _userGesture?: boolean) => null as string | null),
+    executeJavaScript: vi.fn(async (_code: string, _userGesture?: boolean) => null as unknown),
     getZoomLevel: vi.fn(() => zoomLevel),
     isDevToolsOpened: vi.fn(() => devToolsOpened),
     on: vi.fn(),
     off: vi.fn(),
     openDevTools: vi.fn(() => { devToolsOpened = true }),
     reloadIgnoringCache: vi.fn(),
+    forcefullyCrashRenderer: vi.fn(),
+    isLoadingMainFrame: vi.fn(() => false),
     setZoomLevel: vi.fn((level: number) => { zoomLevel = level }),
     setWindowOpenHandler: vi.fn(),
     focus: vi.fn(),
@@ -1012,6 +1014,7 @@ describe('Electron desktop runtime', () => {
 
   describe('runtime renderer recovery', () => {
     async function mountHealthyRenderer() {
+      vi.useFakeTimers()
       vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
       const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
       const restart = vi.fn(async () => {})
@@ -1023,7 +1026,6 @@ describe('Electron desktop runtime', () => {
       await runtime.mountScheduled()
       runtime.reportRendererBoot({ status: 'healthy' })
       await boot
-      vi.useFakeTimers()
       const window = electron.browserWindows[0]!
       const gone = electron.webContents.on.mock.calls
         .find(([event]) => event === 'render-process-gone')?.[1]
@@ -1104,6 +1106,39 @@ describe('Electron desktop runtime', () => {
       expect(electron.dialog.showMessageBox).not.toHaveBeenCalled()
       expect(electron.chromeWebContents.reloadIgnoringCache).toHaveBeenCalledOnce()
       await release()
+    })
+
+    it('automatically recovers a blank live page and validates visible content after reload', async () => {
+      const { runtime, release, window, healthy, logger } = await mountHealthyRenderer()
+      window.isVisible.mockReturnValue(true)
+      electron.webContents.executeJavaScript.mockResolvedValue(false)
+      await vi.advanceTimersByTimeAsync(10_001)
+      expect(electron.webContents.reloadIgnoringCache).toHaveBeenCalledOnce()
+      expect(electron.webContents.forcefullyCrashRenderer).not.toHaveBeenCalled()
+      healthy()
+      expect(logger.error).not.toHaveBeenCalledWith('dsh-plugin-desktop: automatic renderer recovery healthy')
+      electron.webContents.executeJavaScript.mockResolvedValue(true)
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(logger.error).toHaveBeenCalledWith('dsh-plugin-desktop: automatic renderer recovery healthy')
+      expect(electron.dialog.showMessageBox).not.toHaveBeenCalled()
+      runtime.prepareToQuit()
+      await release()
+      electron.webContents.executeJavaScript.mockResolvedValue(null)
+    })
+
+    it('replaces a persistently unresponsive renderer without waiting for it to exit itself', async () => {
+      const { release, window, gone } = await mountHealthyRenderer()
+      window.isVisible.mockReturnValue(true)
+      electron.webContents.executeJavaScript.mockImplementation(() => new Promise(() => {}))
+      electron.webContents.forcefullyCrashRenderer.mockImplementationOnce(() => {
+        gone({}, { reason: 'crashed', exitCode: 9 })
+      })
+      await vi.advanceTimersByTimeAsync(30_001)
+      expect(electron.webContents.forcefullyCrashRenderer).toHaveBeenCalledOnce()
+      expect(electron.webContents.reloadIgnoringCache).toHaveBeenCalledOnce()
+      expect(electron.dialog.showMessageBox).not.toHaveBeenCalled()
+      await release()
+      electron.webContents.executeJavaScript.mockResolvedValue(null)
     })
 
     it('retries a failed main-frame load but ignores subframe errors and aborted navigation', async () => {
