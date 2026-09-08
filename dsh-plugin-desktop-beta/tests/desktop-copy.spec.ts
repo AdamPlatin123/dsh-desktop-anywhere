@@ -48,7 +48,7 @@ describe('Desktop product copy', () => {
     expect(copy.dataGuideBody).toBe('可以更改用于加载数据的文件夹；只有前面的恢复方式都无效时，才建议执行恢复出厂设置。')
     expect(copy.dataManagementBody).toBe('这里显示当前桌面端正在使用的 DSH 数据目录。Profile、插件、设置和会话等数据会从该目录加载和保存；更改目录不会删除原目录中的数据。')
     expect(copy.dataDirectoryPlaceholder).toBe('输入完整路径')
-    expect(copy.confirmDataDirectoryChangeBody).toBe('目标文件夹如果为空，则DSH Desktop 会创建一个全新的环境；旧数据目录不会被删除。')
+    expect(copy.confirmDataDirectoryChangeBody).toBe('建议不要使用中文路径。\n\n目标文件夹如果为空，则DSH Desktop 会创建一个全新的环境；旧数据目录不会被删除。')
     expect(copy.restoreDefaultDataDirectory).toBe('恢复默认')
     expect(copy.confirmRestoreDefaultDirectoryBody).toContain('当前数据目录不会被删除')
     expect(copy.confirmCreateDefaultDirectoryMessage).toBe('默认数据目录不存在，是否新建？')

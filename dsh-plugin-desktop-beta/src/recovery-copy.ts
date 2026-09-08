@@ -84,7 +84,6 @@ export interface DesktopRecoveryCopy {
   readonly dataDirectoryUnavailable: string
   readonly dataDirectoryPath: string
   readonly dataDirectoryPlaceholder: string
-  readonly dataDirectoryPathHint: string
   readonly selectDataDirectory: string
   readonly browse: string
   readonly applyDataDirectory: string
@@ -225,7 +224,6 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     dataDirectoryUnavailable: 'Data management is unavailable before the active DSH Home is resolved or while Safe Mode is active.',
     dataDirectoryPath: 'New data directory',
     dataDirectoryPlaceholder: 'Enter the full path',
-    dataDirectoryPathHint: 'We recommend using a path without Chinese characters.',
     selectDataDirectory: 'Select a DSH data directory',
     browse: 'Browse…',
     applyDataDirectory: 'Change directory and restart',
@@ -235,7 +233,7 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     factoryResetAction: 'Reset and reinstall',
     confirmDataDirectoryChange: 'Change the data directory?',
     confirmDataDirectoryChangeMessage: 'Continue to choose a new DSH data directory?',
-    confirmDataDirectoryChangeBody: 'If the target folder is empty, DSH Desktop will create a new environment. The old data directory will not be deleted.',
+    confirmDataDirectoryChangeBody: 'We recommend using a path without Chinese characters.\n\nIf the target folder is empty, DSH Desktop will create a new environment. The old data directory will not be deleted.',
     continueDataDirectoryChange: 'Continue',
     confirmRestoreDefaultDirectory: 'Restore the default data directory?',
     confirmRestoreDefaultDirectoryMessage: 'Switch to the default data directory and restart?',
@@ -368,7 +366,6 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     dataDirectoryUnavailable: '尚未解析出当前 DSH Home，或正处于安全模式，因此暂时无法管理用户数据目录。',
     dataDirectoryPath: '新的数据目录',
     dataDirectoryPlaceholder: '输入完整路径',
-    dataDirectoryPathHint: '建议不要使用中文路径。',
     selectDataDirectory: '选择 DSH 数据目录',
     browse: '浏览…',
     applyDataDirectory: '更改目录并重启',
@@ -378,7 +375,7 @@ const COPY: Record<DesktopLocale, DesktopRecoveryCopy> = {
     factoryResetAction: '重置并重装',
     confirmDataDirectoryChange: '更改数据目录？',
     confirmDataDirectoryChangeMessage: '继续选择新的 DSH 数据目录？',
-    confirmDataDirectoryChangeBody: '目标文件夹如果为空，则DSH Desktop 会创建一个全新的环境；旧数据目录不会被删除。',
+    confirmDataDirectoryChangeBody: '建议不要使用中文路径。\n\n目标文件夹如果为空，则DSH Desktop 会创建一个全新的环境；旧数据目录不会被删除。',
     continueDataDirectoryChange: '继续',
     confirmRestoreDefaultDirectory: '恢复默认数据目录？',
     confirmRestoreDefaultDirectoryMessage: '切换到系统默认数据目录并重启？',
