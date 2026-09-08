@@ -95,6 +95,7 @@ const PRODUCT_VERSION = desktopProductVersion()
 /** Main-process deadline for one Renderer generation to settle its client Loader. */
 export const RENDERER_BOOT_TIMEOUT_MS = 30_000
 
+/** Native adapter used by the DSH Desktop launcher and owned by its Cordis shell plugin. */
 /** HTTP statuses whose Response must be constructed without a body stream. */
 const NULL_BODY_STATUSES = new Set([204, 205, 304])
 
@@ -174,7 +175,7 @@ export function requestDesktopArtifact(url: string, init: RequestInit): Promise<
   })
 }
 
-/** Native adapter used by the DSH Desktop launcher and owned by its Cordis shell plugin. */
+
 export class ElectronDesktopRuntime implements DesktopRuntime {
   readonly platform: DesktopPlatform
   readonly windowsBuild: number | undefined
@@ -229,7 +230,7 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       request: (url, init) => net.fetch(url, init),
       confirmDownload: (version, channel) => this.confirmUpdateDownload(version, channel),
       showManualCheckResult: result => this.showManualUpdateCheckResult(result),
-      downloadAndOpen: (version, signal, channel, installerSha256) => this.downloadAndOpenUpdate(version, signal, channel, installerSha256),
+      downloadAndOpen: (version, signal, channel) => this.downloadAndOpenUpdate(version, signal, channel),
       notify: notification => { this.showNotification(notification) },
     }
   }
@@ -751,7 +752,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     version: string,
     signal: AbortSignal,
     channel: DesktopReleaseChannel = 'stable',
-    installerSha256?: Readonly<Partial<Record<'win32' | 'darwin', string>>>,
   ): Promise<void> {
     const copy = desktopNativeCopy(this.currentLocale)
     const platform = this.platformStrategy.updateDownloadPlatform
@@ -766,9 +766,8 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
       version,
       ...(channel === 'stable' ? {} : { channel }),
       destinationPath,
-      request: requestDesktopArtifact,
+      request: (url, init) => requestDesktopArtifact(url, init),
       signal,
-      ...(installerSha256?.[platform] === undefined ? {} : { expectedSha256: installerSha256[platform] }),
     })
     signal.throwIfAborted()
     const artifact: DesktopUpdateArtifact = { platform, version, path: artifactPath }
