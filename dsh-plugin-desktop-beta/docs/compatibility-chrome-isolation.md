@@ -1,5 +1,7 @@
 # Compatibility chrome isolation
 
+This optimization from PR #868 is beta-only. Stable uses the original single-document compatibility frame. Renderer crash recovery from PR #869 remains enabled in both variants.
+
 On macOS and Windows, compatibility mode uses two documents in one native window:
 
 - A transparent, Desktop-owned WebContentsView loads the packaged `native-ui/compatibility-chrome.html` in an ephemeral, Desktop-only session. Its preload exposes only fixed chrome commands and locale/version state.

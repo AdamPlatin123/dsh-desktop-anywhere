@@ -390,7 +390,7 @@ describe('Electron desktop runtime', () => {
     vi.restoreAllMocks()
   })
 
-  it('uses the independent macOS compatibility frame, Dock icon, and template tray image', async () => {
+  it('uses the single-document macOS compatibility frame, Dock icon, and template tray image', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     electron.app.getPreferredSystemLanguages.mockReturnValue(['zh-Hans-CN', 'en-US'])
     const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
@@ -410,28 +410,20 @@ describe('Electron desktop runtime', () => {
       titleBarStyle: 'hiddenInset',
       trafficLightPosition: { x: 16, y: 12 },
       webPreferences: {
+        preload: expect.stringMatching(/\/preload\.cjs$/),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
         webSecurity: true,
-        partition: 'dsh-desktop-compatibility-host',
+        partition: 'persist:dsh-desktop-renderer',
       },
     }))
     expect(options).not.toHaveProperty('autoHideMenuBar')
     expect(options).not.toHaveProperty('titleBarOverlay')
-    expect(electron.contentViews).toHaveLength(2)
-    expect(electron.contentViews[1]?.options).toEqual({ webPreferences: {
-      preload: expect.stringMatching(/\/preload\.cjs$/),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      webSecurity: true,
-      partition: 'persist:dsh-desktop-renderer',
-    } })
-    expect(electron.contentViews[1]?.setBounds).toHaveBeenCalledWith({ x: 0, y: 36, width: 1280, height: 804 })
-    expect(electron.chromeWebContents.loadFile).toHaveBeenCalledWith(expect.stringMatching(/compatibility-chrome\.html$/))
-    expect(electron.webContents.loadURL).toHaveBeenCalledWith(spec.url)
-    expect(electron.browserWindows[0]?.webContents).not.toBe(electron.webContents)
+    expect(electron.contentViews).toHaveLength(0)
+    expect(electron.chromeWebContents.loadFile).not.toHaveBeenCalled()
+    expect(electron.browserWindows[0]?.loadURL).toHaveBeenCalledWith(spec.url)
+    expect(electron.browserWindows[0]?.webContents).toBe(electron.webContents)
     expect(electron.browserWindows[0]?.accessibleTitle).toBe('DeepSeek Harness Desktop')
     expect(spec.readThemeSource).toHaveBeenCalledOnce()
     expect(electron.nativeTheme.themeSource).toBe('system')
@@ -446,7 +438,7 @@ describe('Electron desktop runtime', () => {
     expect(electron.templateIcon.setTemplateImage).toHaveBeenCalledWith(true)
     expect(electron.trays[0]?.image).toBe(electron.templateIcon)
     expect(electron.menuTemplates[0]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Switch to Extended Window', enabled: true }),
+      expect.objectContaining({ label: 'Mode: Compatibility Mode', enabled: true }),
     ]))
 
     const titleListener = electron.browserWindowOn.mock.calls.find(([event]) => event === 'page-title-updated')?.[1]
@@ -798,7 +790,7 @@ describe('Electron desktop runtime', () => {
     expect(electron.Menu.setApplicationMenu).not.toHaveBeenCalled()
     expect(electron.browserWindows[0]?.removeMenu).not.toHaveBeenCalled()
     expect(electron.menuTemplates[0]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Switch to Extended Window', enabled: false }),
+      expect.objectContaining({ label: 'Mode: Compatibility Mode', enabled: false }),
     ]))
 
     await release()
@@ -1029,7 +1021,6 @@ describe('Electron desktop runtime', () => {
       const loadFailed = electron.webContents.on.mock.calls
         .find(([event]) => event === 'did-fail-load')?.[1]
       const healthy = () => {
-        electron.chromeWebContents.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1]()
         loaded()
         runtime.reportRendererBoot({ status: 'healthy' })
       }
@@ -1084,22 +1075,16 @@ describe('Electron desktop runtime', () => {
       await release()
     })
 
-    it('recovers an isolated chrome crash and waits for both documents', async () => {
-      const { runtime, release, healthy, logger } = await mountHealthyRenderer()
-      const chromeGone = electron.chromeWebContents.on.mock.calls
-        .filter(([event]) => event === 'render-process-gone').at(-1)?.[1]
-      chromeGone({}, { reason: 'crashed', exitCode: 9 })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(electron.chromeWebContents.reloadIgnoringCache).toHaveBeenCalledOnce()
-      expect(electron.webContents.reloadIgnoringCache).toHaveBeenCalledOnce()
-      electron.webContents.on.mock.calls.find(([event]) => event === 'did-finish-load')?.[1]()
-      runtime.reportRendererBoot({ status: 'healthy' })
-      expect(logger.error).not.toHaveBeenCalledWith('dsh-plugin-desktop: automatic renderer recovery healthy')
-      healthy()
-      expect(logger.error).toHaveBeenCalledWith('dsh-plugin-desktop: automatic renderer recovery healthy')
-      await vi.advanceTimersByTimeAsync(90_000)
-      expect(electron.dialog.showMessageBox).not.toHaveBeenCalled()
-      expect(electron.chromeWebContents.reloadIgnoringCache).toHaveBeenCalledOnce()
+    it('restores a minimized Windows compatibility window without extra views or reloads', async () => {
+      const { runtime, release, window } = await mountHealthyRenderer()
+      window.isMinimized.mockReturnValue(true)
+      runtime.show()
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(window.restore).toHaveBeenCalledOnce()
+      expect(window.webContents).toBe(electron.webContents)
+      expect(electron.contentViews).toHaveLength(0)
+      expect(electron.webContents.reloadIgnoringCache).not.toHaveBeenCalled()
+      expect(electron.chromeWebContents.loadFile).not.toHaveBeenCalled()
       await release()
     })
 
@@ -1203,7 +1188,7 @@ describe('Electron desktop runtime', () => {
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
         '打开 DSH Desktop',
-        '切换到扩展窗口',
+        '模式：兼容模式',
         '退出',
       ]))
 
@@ -1212,7 +1197,7 @@ describe('Electron desktop runtime', () => {
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
         'Open DSH Desktop',
-        'Switch to Extended Window',
+        'Mode: Compatibility Mode',
         'Quit',
       ]))
 
@@ -1222,7 +1207,7 @@ describe('Electron desktop runtime', () => {
     expect((electron.menuTemplates.at(-1) as Array<{ label?: string }>).map(item => item.label))
       .toEqual(expect.arrayContaining([
         '打开 DSH Desktop',
-        '切换到扩展窗口',
+        '模式：兼容模式',
         '退出',
       ]))
 
@@ -1716,21 +1701,49 @@ describe('Electron desktop runtime', () => {
     await release()
   })
 
-  it('cycles from compatibility to extended mode when its tray command is clicked', async () => {
-    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
-    const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
-    const requestModeChange = vi.fn(async () => {})
-    const runtime = new ElectronDesktopRuntime(async () => {})
-    const release = runtime.schedule({ ...spec, requestModeChange })
+  describe.each(['darwin', 'win32', 'linux'] as const)('tray mode selector on %s', platform => {
+    it.each([
+      ['compatibility', 'en'], ['compatibility', 'zh'],
+      ['extended', 'en'], ['extended', 'zh'],
+      ['advanced', 'en'], ['advanced', 'zh'],
+    ].filter(([mode]) => platform !== 'linux' || mode === 'compatibility') as Array<['compatibility' | 'extended' | 'advanced', 'en' | 'zh']>)('lists all modes with %s selected (%s)', async (mode, locale) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const { ElectronDesktopRuntime } = await import('../src/electron-runtime.ts')
+      const requestModeChange = vi.fn(async () => {})
+      const runtime = new ElectronDesktopRuntime(async () => {})
+      const release = runtime.schedule({ ...spec, mode, requestModeChange, readLocalePreference: () => locale })
+      await runtime.mountScheduled()
 
-    await runtime.mountScheduled()
-    const item = (electron.menuTemplates[0] as Array<{ label?: string, click?: () => void }>)
-      .find(candidate => candidate.label === 'Switch to Extended Window')
-    expect(item).toBeDefined()
-    item?.click?.()
-    await vi.waitFor(() => { expect(requestModeChange).toHaveBeenCalledWith('extended') })
+      const modes = ['compatibility', 'extended', 'advanced'] as const
+      const labels = locale === 'zh' ? ['兼容模式', '扩展窗口', '增强模式'] : ['Compatibility Mode', 'Extended Window', 'Enhanced Mode']
+      const title = locale === 'zh' ? `模式：${labels[modes.indexOf(mode)]}` : `Mode: ${labels[modes.indexOf(mode)]}`
+      type Item = { label?: string, type?: string, checked?: boolean, enabled?: boolean, click?: () => void, submenu?: Item[] }
+      const menu = electron.menuTemplates.at(-1) as Item[]
+      const selectors = menu.filter(item => item.label === title)
+      expect(selectors).toHaveLength(1)
+      expect(selectors[0]?.enabled).toBe(platform !== 'linux')
+      expect(selectors[0]?.click).toBeUndefined()
+      const submenu = selectors[0]?.submenu
+      expect(submenu).toHaveLength(3)
+      expect(submenu?.map(item => item.label)).toEqual(labels)
+      expect(menu.some(item => labels.includes(item.label ?? ''))).toBe(false)
+      expect(submenu?.filter(item => item.checked)).toHaveLength(1)
 
-    await release()
+      for (const [index, target] of modes.entries()) {
+        const item = submenu?.[index]
+        expect(item).toEqual(expect.objectContaining({
+          type: 'radio', checked: target === mode, enabled: platform !== 'linux',
+        }))
+        requestModeChange.mockClear()
+        item?.click?.()
+        if (target === mode || platform === 'linux') {
+          expect(requestModeChange).not.toHaveBeenCalled()
+        } else {
+          await vi.waitFor(() => { expect(requestModeChange).toHaveBeenCalledExactlyOnceWith(target) })
+        }
+      }
+      await release()
+    })
   })
 
   it('rebuilds ordered effect-scoped tray contributions without replacing native commands', async () => {
@@ -1766,7 +1779,7 @@ describe('Electron desktop runtime', () => {
       'Open DSH Desktop', undefined,
       'Earlier Tool', 'Later Tool', undefined,
       'Check for Updates…', undefined,
-      'Switch to Extended Window', undefined,
+      'Mode: Compatibility Mode', undefined,
       'Quit',
     ])
     expect(electron.menuTemplates.at(-1)).toEqual(expect.arrayContaining([
@@ -2579,7 +2592,7 @@ describe('Electron desktop runtime', () => {
       vibrancy: 'sidebar',
     }))
     expect(electron.menuTemplates[0]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Switch to Compatibility Mode', enabled: true }),
+      expect.objectContaining({ label: 'Mode: Enhanced Mode', enabled: true }),
     ]))
 
     runtime.setThemeSource('system')
@@ -2641,7 +2654,7 @@ describe('Electron desktop runtime', () => {
     expect(electron.browserWindowOptions[0]).not.toHaveProperty('transparent')
     expect(electron.browserWindowOptions[0]).not.toHaveProperty('backgroundMaterial')
     expect(electron.menuTemplates[0]).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Switch to Enhanced Mode', enabled: true }),
+      expect.objectContaining({ label: 'Mode: Extended Window', enabled: true }),
     ]))
 
     await release()

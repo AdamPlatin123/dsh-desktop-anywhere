@@ -70,20 +70,6 @@ import {
   type MainWindowStateStore,
 } from './main-window-state.ts'
 
-/** Return the presentation mode opposite the active generation. */
-export function nextDesktopShellMode(mode: DesktopShellSpec['mode']): DesktopShellSpec['mode'] {
-  if (mode === 'compatibility') return 'extended'
-  if (mode === 'extended') return 'advanced'
-  return 'compatibility'
-}
-
-/** Return the tray command describing the mode that will be activated. */
-export function modeToggleLabel(mode: DesktopShellSpec['mode'], locale: DesktopLocale = 'en'): string {
-  if (mode === 'compatibility') return desktopTrayLabel(locale, 'switchToExtended')
-  if (mode === 'extended') return desktopTrayLabel(locale, 'switchToAdvanced')
-  return desktopTrayLabel(locale, 'switchToCompatibility')
-}
-
 /**
  * Read the desktop package version instead of Electron's development-app version.
  * @param moduleUrl - module below the package's `src` or `lib` directory.
@@ -256,20 +242,6 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
         rendererRecoveryCopy: () => rendererRecoveryCopy[this.currentLocale],
         logError: message => { this.logError(message) },
         mainWindowState: this.mainWindowState,
-        chromeActions: {
-          locale: () => this.locale,
-          version: PRODUCT_VERSION,
-          openTerminal: () => { this.openTerminal() },
-          restart: () => this.requestRestart(),
-          restartToRecovery: () => this.requestRecoveryRestart(),
-          reload: () => { this.reloadRenderer() },
-          developerTools: () => { this.toggleDeveloperTools() },
-          checkForUpdates: async () => {
-            const command = [...this.trayItems.values()].find(item => item.id === 'check-for-updates')
-            if (command === undefined || command.enabled?.() === false) throw new Error('Desktop update check is unavailable')
-            await command.invoke()
-          },
-        },
       })
       this.generation = generation
       this.mountTask = generation.mount(beforeInteractive).then(() => {
@@ -864,6 +836,12 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
 
   private buildTrayTemplate(spec: DesktopShellSpec): Electron.MenuItemConstructorOptions[] {
     const show = (): void => { this.show() }
+    const changeMode = (mode: DesktopShellSpec['mode']): void => {
+      if (!this.platformStrategy.canToggleShellMode || mode === spec.mode) return
+      void spec.requestModeChange(mode).catch((cause: unknown) => {
+        this.logError(`dsh-plugin-desktop: failed to change shell mode: ${cause instanceof Error ? cause.message : String(cause)}`)
+      })
+    }
     const tools = this.contributedTrayItems('tools')
     const profiles = this.contributedTrayItems('profiles')
     const status = this.contributedTrayItems('status')
@@ -876,13 +854,15 @@ export class ElectronDesktopRuntime implements DesktopRuntime {
     template.push(
       { type: 'separator' },
       {
-        label: modeToggleLabel(spec.mode, this.locale),
+        label: desktopTrayLabel(this.locale, 'shellMode', desktopTrayLabel(this.locale, spec.mode)),
         enabled: this.platformStrategy.canToggleShellMode,
-        click: () => {
-          void spec.requestModeChange(nextDesktopShellMode(spec.mode)).catch((cause: unknown) => {
-            this.logError(`dsh-plugin-desktop: failed to change shell mode: ${cause instanceof Error ? cause.message : String(cause)}`)
-          })
-        },
+        submenu: (['compatibility', 'extended', 'advanced'] as const).map(mode => ({
+          label: desktopTrayLabel(this.locale, mode),
+          type: 'radio',
+          checked: mode === spec.mode,
+          enabled: this.platformStrategy.canToggleShellMode,
+          click: () => { changeMode(mode) },
+        })),
       },
       { type: 'separator' },
       { label: desktopTrayLabel(this.locale, 'quit'), click: () => { spec.requestQuit(0) } },

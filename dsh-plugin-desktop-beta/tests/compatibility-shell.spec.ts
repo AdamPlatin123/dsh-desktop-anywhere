@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
   },
 }))
 
-function fixture() {
+function fixture(platform: 'darwin' | 'win32' = 'darwin') {
   const ipc = { handle: vi.fn(), removeHandler: vi.fn() }
   const webContents = Object.assign(new EventEmitter(), {
     ipc,
@@ -43,6 +43,7 @@ function fixture() {
     webContents,
     contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
     getContentSize: vi.fn(() => [1280, 840]),
+    isMinimized: vi.fn(() => false),
     isDestroyed: vi.fn(() => false),
     loadFile: vi.fn(async (path: string) => { webContents.mainFrame.url = pathToFileURL(path).href }),
   })
@@ -53,7 +54,7 @@ function fixture() {
     checkForUpdates: vi.fn(async () => {}),
   }
   const spec = { material: 'off', requestModeChange: vi.fn(async () => {}) } as unknown as DesktopShellSpec
-  const shell = new CompatibilityShell(window as unknown as BrowserWindow, spec, 'darwin', '/desktop/preload.cjs', actions)
+  const shell = new CompatibilityShell(window as unknown as BrowserWindow, spec, platform, '/desktop/preload.cjs', actions)
   const handler = ipc.handle.mock.calls[0]?.[1] as (event: unknown, command: unknown) => unknown
   const event = () => ({ sender: webContents, senderFrame: webContents.mainFrame })
   return { shell, window, webContents, ipc, handler, event, actions, spec }
@@ -94,6 +95,43 @@ describe('isolated compatibility shell', () => {
     webContents.mainFrame.url = 'http://127.0.0.1:43120/'
     expect(() => handler(event(), 'terminal')).toThrow('untrusted')
     expect(actions.openTerminal).not.toHaveBeenCalled()
+    shell.dispose()
+  })
+
+  it('preserves the Windows content surface through minimize, blur, and restore without reloading', () => {
+    const { shell, window, actions } = fixture('win32')
+    expect(shell.content).toMatchObject({ options: { webPreferences: { backgroundThrottling: false } } })
+    vi.mocked(shell.content.setBounds).mockClear()
+    window.isMinimized.mockReturnValue(true)
+    window.getContentSize.mockReturnValue([0, 0])
+    window.emit('resize')
+    window.emit('blur')
+    window.emit('hide')
+    window.isMinimized.mockReturnValue(false)
+    window.emit('restore') // Windows may not have published the restored size yet.
+    expect(shell.content.setBounds).not.toHaveBeenCalled()
+    window.getContentSize.mockReturnValue([1280, 840])
+    window.emit('resize')
+    window.emit('show')
+    expect(shell.content.setBounds).not.toHaveBeenCalled()
+    expect(actions.reload).not.toHaveBeenCalled()
+    window.getContentSize.mockReturnValue([1000, 700])
+    window.emit('restore')
+    expect(shell.content.setBounds).toHaveBeenCalledExactlyOnceWith({ x: 0, y: 36, width: 1000, height: 664 })
+    shell.dispose()
+    expect(window.listenerCount('restore')).toBe(0)
+    expect(window.listenerCount('show')).toBe(0)
+  })
+
+  it('does not resize the page when chrome popups expand, collapse, or lose focus', async () => {
+    const { shell, window, handler, event } = fixture('win32')
+    await shell.load()
+    vi.mocked(shell.content.setBounds).mockClear()
+    handler(event(), 'expand')
+    handler(event(), 'collapse')
+    window.emit('blur')
+    expect(shell.content.setBounds).not.toHaveBeenCalled()
+    expect(shell.chromeView.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 1280, height: 36 })
     shell.dispose()
   })
 
