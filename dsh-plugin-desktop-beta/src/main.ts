@@ -144,6 +144,7 @@ import { showDesktopDialog } from './desktop-dialog-window.ts'
 import {
   clearDesktopProfileUsageHistory,
   desktopReleaseUserDataLocations,
+  hasDesktopProfileUsageHistory,
   inspectDesktopProfileChannelAdmission,
 } from './profile-channel-admission.ts'
 import {
@@ -1012,6 +1013,7 @@ async function start(): Promise<void> {
                 process.cwd(),
               ],
               trashItem: async path => { await shell.trashItem(path) },
+              clearProfileUsageHistory: profileDir => { clearDesktopProfileUsageHistory(releaseUserDataLocations, profileDir) },
             })
           } finally {
             lease.release()
@@ -1219,7 +1221,8 @@ async function start(): Promise<void> {
     const setupWizardState = safeModePaths === undefined
       ? readDesktopSetupWizardState(marketUserDataDir, prepared.profile.dir)
       : undefined
-    if (safeModePaths === undefined && desktopSetupWizardRequired(setupWizardState, setupWizardVersions)) {
+    if (safeModePaths === undefined && desktopSetupWizardRequired(setupWizardState, setupWizardVersions)
+      && !hasDesktopProfileUsageHistory(releaseUserDataLocations, prepared.profile.dir, activeProfileName)) {
       const setupSettings = readDesktopSetupWizardSettings(prepared.settingsDocument)
       setupWizardWindow = new DesktopSetupWizardWindow({
         locale: desktopLocaleFromLanguageTag(app.getLocale()),
