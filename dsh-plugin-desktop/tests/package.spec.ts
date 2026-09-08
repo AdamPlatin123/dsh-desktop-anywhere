@@ -91,8 +91,8 @@ describe('published package surface', () => {
 
   it('keeps Safe Mode out of the normal DSH home and Desktop state', () => {
     expect(main).toContain('const profileUserDataDir = safeModePaths?.userDataDir ?? desktopUserDataDir')
-    expect(main).toContain('const homeDir = safeModePaths?.homeDir ?? resolveDshHome()')
-    expect(main).toContain('if (safeModePaths !== undefined) process.env.DSH_HOME = homeDir')
+    expect(main).toContain('if (safeModePaths !== undefined) {\n      homeDir = safeModePaths.homeDir')
+    expect(main).toContain('process.env.DSH_HOME = homeDir')
     expect(main).toContain('const desktopLaunchEnvironment = withDesktopDshHome(environment, homeDir)')
     expect(main).toContain('hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, desktopLaunchEnvironment)')
     expect(main).toContain('prepareDesktopSafeModeEnvironment(desktopUserDataDir)')
