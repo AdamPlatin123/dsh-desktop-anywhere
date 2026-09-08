@@ -1976,6 +1976,31 @@ describe('restricted HTTP boundary', () => {
     expect(seen.filter(url => url === 'https://provider.example/b')).toHaveLength(3)
   })
 
+  it('re-imposes the entry limit after a burst of concurrent requests settles', async () => {
+    let now = 1_000
+    const seen: string[] = []
+    const delegate: CatalogHttpClient = {
+      getJson: vi.fn(async (url: string) => {
+        seen.push(url)
+        return { value: { url }, finalUrl: url }
+      }),
+    }
+    const client = createCachedCatalogHttpClient(delegate, { ttlMs: 300_000, now: () => now, maxEntries: 2 })
+    // Six distinct URLs resolve in submission order; request-start eviction
+    // skips every in-flight entry, so only the post-completion sweep the fix
+    // adds can bring the cache back under the limit.
+    await Promise.all(['a', 'b', 'c', 'd', 'e', 'f'].map(suffix =>
+      client.getJson(`https://provider.example/${suffix}`, new AbortController().signal)))
+    expect(seen).toHaveLength(6)
+
+    // The earliest URLs were evicted once everything settled, so reading them
+    // again must hit the delegate; the two most recent stay cached.
+    await client.getJson('https://provider.example/a', new AbortController().signal)
+    expect(seen.filter(url => url === 'https://provider.example/a')).toHaveLength(2)
+    await client.getJson('https://provider.example/f', new AbortController().signal)
+    expect(seen.filter(url => url === 'https://provider.example/f')).toHaveLength(1)
+  })
+
   it('refreshes the LRU order for an entry refetched after expiry', async () => {
     let now = 1_000
     const seen: string[] = []

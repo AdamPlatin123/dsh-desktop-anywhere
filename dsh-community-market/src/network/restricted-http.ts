@@ -401,6 +401,11 @@ export function createCachedCatalogHttpClient(
             delete entry.inFlight
             delete entry.inFlightController
           }
+          // Eviction at request start skips in-flight entries, so a burst of
+          // concurrent requests can leave the cache over the limit once they
+          // all settle. Re-run eviction here so the bound holds without
+          // waiting for the next request to come in.
+          evictCachedEntries(cache, maxEntries, now, ttlMs)
         })
       }
       entry.waiters += 1
