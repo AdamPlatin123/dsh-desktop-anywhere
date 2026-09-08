@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DESKTOP_DOWNLOAD_URLS,
+  DESKTOP_TARGET_VERSION_HEADER,
   MAX_UPDATE_DOWNLOAD_BYTES,
   UpdateDownloadError,
   desktopUpdateFilename,
@@ -16,6 +17,7 @@ import {
   type UpdateArtifactRequest,
   type UpdateArtifactResponse,
 } from '../src/update-download.ts'
+import { DESKTOP_RELEASE_CHANNEL_HEADER } from '../src/update-checker.ts'
 
 const temporaryRoots: string[] = []
 
