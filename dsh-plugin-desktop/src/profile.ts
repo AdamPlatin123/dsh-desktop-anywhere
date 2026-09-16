@@ -5,16 +5,8 @@ const PROFILE_CONFIG_MODE = 0o666
 
 import { createRequire } from 'node:module'
 import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  readdirSync,
-  readlinkSync,
-  rmSync,
-  rmdirSync,
-  statSync,
-  type Dirent,
-  unlinkSync,
+existsSync,
+readFileSync,
 } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, join } from 'node:path'
