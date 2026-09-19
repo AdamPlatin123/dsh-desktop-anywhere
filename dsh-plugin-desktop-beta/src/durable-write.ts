@@ -5,23 +5,59 @@ import { closeSync, fsyncSync, lstatSync, openSync, renameSync, unlinkSync, writ
 import { dirname } from 'node:path'
 
 /**
+ * Rename-over a destination that another process holds open without
+ * FILE_SHARE_DELETE (antivirus, the Windows search indexer, the Host itself)
+ * fails with EPERM/EBUSY/EACCES on Windows. A short backoff retry absorbs the
+ * holder letting go; other errors surface immediately.
+ */
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+const RENAME_RETRY_DELAYS_MS = [20, 40, 80, 160, 320]
+
+function sleepSync(milliseconds: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
+}
+
+function renameDurableSync(from: string, to: string): void {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      renameSync(from, to)
+      return
+    } catch (cause) {
+      const code = (cause as NodeJS.ErrnoException | null)?.code
+      if (code === undefined || !RENAME_RETRY_CODES.has(code) || attempt >= RENAME_RETRY_DELAYS_MS.length) throw cause
+      sleepSync(RENAME_RETRY_DELAYS_MS[attempt]!)
+    }
+  }
+}
+
+/**
  * Atomic durable file write: create a fresh temporary with `wx`, fsync, then
  * rename over the target. The rename replaces the directory entry instead of
  * following a pre-existing symlink at the target path, and a failure never
- * leaves a truncated file behind. Callers own directory creation and
- * permissions. When the target already exists as a regular file, its own
- * permission bits are inherited: an atomic replacement must not widen an
- * administrator- or user-tightened mode (for example a 0o600 config replaced
- * through the default 0o666 mode under umask 022).
+ * leaves a truncated file behind. Callers own directory creation.
+ *
+ * `mode` is the creation default: it applies when the target does not exist
+ * yet. On paths where the mode is an explicit instruction rather than a
+ * default — checkpoint restore replays the mode captured at snapshot time —
+ * leave `inheritExistingMode` off so a pre-existing file's current bits never
+ * override the instruction. Configuration call sites opt in: an atomic
+ * replacement must not widen an administrator- or user-tightened mode (for
+ * example a 0o600 config replaced through the default 0o666 mode under umask
+ * 022).
  */
-export function writeDurableFile(path: string, bytes: Uint8Array, mode = 0o600): void {
+export function writeDurableFile(
+  path: string,
+  bytes: Uint8Array,
+  mode = 0o600,
+  options: { readonly inheritExistingMode?: boolean } = {},
+): void {
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
   let fd: number | undefined
   try {
     // lstat does not follow symlinks: a symlinked target is replaced, not
     // measured, and the caller-supplied mode applies unchanged.
     const existing = lstatSync(path, { throwIfNoEntry: false })
-    const effectiveMode = existing !== undefined && existing.isFile()
+    const effectiveMode = options.inheritExistingMode === true && existing !== undefined && existing.isFile()
       ? (existing.mode & 0o777)
       : mode
     fd = openSync(temporary, 'wx', effectiveMode)
@@ -37,7 +73,7 @@ export function writeDurableFile(path: string, bytes: Uint8Array, mode = 0o600):
     fsyncSync(fd)
     closeSync(fd)
     fd = undefined
-    renameSync(temporary, path)
+    renameDurableSync(temporary, path)
     try {
       const directoryFd = openSync(dirname(path), 'r')
       try { fsyncSync(directoryFd) } finally { closeSync(directoryFd) }
