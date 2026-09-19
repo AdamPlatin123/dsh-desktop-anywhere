@@ -11,9 +11,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
+  constants as fsConstants,
   existsSync,
+  fchmodSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -225,28 +229,18 @@ function fail(message: string): never {
 }
 
 /**
- * errno codes that make a slot unreadable right now without corrupting it.
- * ESTALE/ETIMEDOUT/ENOTCONN cover network-filesystem blips where the bytes
- * are intact but the read failed; treating them as corruption would let a
- * later capture overwrite a perfectly good backup.
+ * Anything carrying an errno is an environmental I/O condition where the
+ * bytes are likely intact — disk full, read-only mounts, network-filesystem
+ * blips, antivirus holding the file — and must never authorize overwriting
+ * the slot. Structural corruption in this module comes exclusively from
+ * fail() and JSON.parse, neither of which carries a code. ENOENT is the
+ * exception: readSnapshot maps a missing slot directory to undefined itself,
+ * so ENOENT surfacing here means the directory exists but a file inside it
+ * is gone — genuine structural incompleteness that self-heals.
  */
-const TRANSIENT_SNAPSHOT_IO_CODES = new Set([
-  'EACCES',
-  'EBUSY',
-  'EMFILE',
-  'EIO',
-  'EPERM',
-  'ENFILE',
-  'ESTALE',
-  'ETIMEDOUT',
-  'ENOTCONN',
-])
-
 function isTransientSnapshotIoFailure(cause: unknown): boolean {
-  return cause !== null
-    && typeof cause === 'object'
-    && typeof (cause as NodeJS.ErrnoException).code === 'string'
-    && TRANSIENT_SNAPSHOT_IO_CODES.has((cause as NodeJS.ErrnoException).code as string)
+  const code = (cause as NodeJS.ErrnoException | null)?.code
+  return typeof code === 'string' && code !== 'ENOENT'
 }
 
 function assertAbsolute(label: string, value: string): string {
@@ -292,6 +286,35 @@ function isENOENT(cause: unknown): boolean {
   return (cause as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }
 
+/**
+ * chmod through an O_NOFOLLOW descriptor: a path swapped for a symlink
+ * between the lstat check and the chmod fails with ELOOP instead of
+ * redirecting the mode change outside the checkpoint tree. A drifted
+ * write-only file (0o200/0o000) or no-read directory (0o300) denies
+ * O_RDONLY even though the owner may still chmod it, so that one case
+ * falls back to path-based chmod with a post-hoc type re-verification.
+ * Only reachable on POSIX (CHECK_POSIX_MODE gates every call site).
+ */
+function chmodDurableEntry(path: string, mode: number): void {
+  const noFollow = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0)
+  try {
+    const descriptor = openSync(path, noFollow)
+    try { fchmodSync(descriptor, mode) } finally { closeSync(descriptor) }
+    return
+  } catch (cause) {
+    const code = (cause as NodeJS.ErrnoException | null)?.code
+    if (code === 'ELOOP') {
+      fail(`checkpoint path was replaced concurrently: ${path}`)
+    }
+    if (code !== 'EACCES') throw cause
+  }
+  chmodSync(path, mode)
+  const after = lstatSync(path, { throwIfNoEntry: false })
+  if (after === undefined || after.isSymbolicLink() || !(after.isFile() || after.isDirectory())) {
+    fail(`checkpoint path was replaced concurrently: ${path}`)
+  }
+}
+
 function realDirectory(label: string, path: string): string {
   const absolute = assertAbsolute(label, path)
   let item
@@ -321,9 +344,12 @@ function writeDurable(path: string, bytes: Uint8Array, mode = FILE_MODE): void {
 
 function readJson(path: string): unknown {
   const item = lstatSync(path)
-  if (!item.isFile() || item.isSymbolicLink() || (CHECK_POSIX_MODE && (item.mode & 0o777) !== FILE_MODE)) {
+  if (!item.isFile() || item.isSymbolicLink()) {
     fail(`checkpoint file has unsafe type or mode: ${path}`)
   }
+  // Mode drift is repaired, not treated as corruption — a drifted manifest
+  // mode must not push a healthy slot into the overwrite path.
+  if (CHECK_POSIX_MODE && (item.mode & 0o777) !== FILE_MODE) chmodDurableEntry(path, FILE_MODE)
   if (item.size > MANIFEST_MAX_BYTES) fail(`checkpoint file is too large: ${path}`)
   return JSON.parse(readFileSync(path, 'utf8')) as unknown
 }
@@ -777,7 +803,44 @@ export class DesktopProfileCheckpoint {
     for (const slotId of DESKTOP_PROFILE_CHECKPOINT_SLOT_IDS) this.recoverOrphanedSlot(slotId)
   }
 
+  /**
+   * A hard process kill mid-capture leaves `.staging-<slot>-<pid>-<snapshot>`
+   * behind (the rmSync in captureHealthy's catch never runs). The name
+   * carries the owning pid: sweep a directory only when that pid is
+   * verifiably gone, so a concurrently capturing sibling process never has
+   * its in-flight staging directory deleted.
+   */
+  private removeAbandonedStaging(slotId: DesktopProfileCheckpointSlotId): void {
+    let names: string[]
+    try {
+      names = readdirSync(this.profileRoot).filter(name => name.startsWith(`.staging-${slotId}-`))
+    } catch (cause) {
+      if (isENOENT(cause)) return
+      throw cause
+    }
+    for (const name of names) {
+      const owner = name.slice(`.staging-${slotId}-`.length).split('-')[0] ?? ''
+      if (owner === String(process.pid)) continue
+      // Malformed owner segments are left alone, and a probe result other
+      // than ESRCH (including EPERM, or the empty pid 0) counts as alive —
+      // the sweep always fails toward leaving the directory in place.
+      // Strictly decimal: Number() would also admit '1e3', '0x3e8',
+      // '+1000', and space-padded segments.
+      if (!/^\d+$/u.test(owner)) continue
+      const ownerPid = Number(owner)
+      if (ownerPid <= 0) continue
+      try {
+        process.kill(ownerPid, 0)
+        continue
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException | null)?.code !== 'ESRCH') continue
+      }
+      rmSync(join(this.profileRoot, name), { recursive: true, force: true })
+    }
+  }
+
   private recoverOrphanedSlot(slotId: DesktopProfileCheckpointSlotId): void {
+    this.removeAbandonedStaging(slotId)
     const target = this.slotDirectory(slotId)
     if (existsSync(target)) return
     let candidates: string[]
@@ -832,10 +895,10 @@ export class DesktopProfileCheckpoint {
     try {
       return this.readSnapshot(directory, requireComplete)
     } catch (cause) {
-      // Transient I/O failures (antivirus or indexer holding the file,
-      // EACCES/EBUSY/EMFILE/EIO/EPERM) must not mark a healthy slot as
-      // empty: captureHealthy would then overwrite and destroy it. Only a
-      // failed structural validation self-heals as an empty slot.
+      // Environmental I/O failures (anything carrying an errno) must not
+      // mark a healthy slot as empty: captureHealthy would then overwrite
+      // and destroy it. Only a failed structural validation self-heals as
+      // an empty slot.
       if (isTransientSnapshotIoFailure(cause)) throw cause
       // The slot will be reported as empty and overwritten by the next
       // healthy capture; surface why so silent corruption stays diagnosable.
@@ -852,9 +915,15 @@ export class DesktopProfileCheckpoint {
     try {
       const expectedSlotId = assertSlotId(basename(directory))
       const directoryItem = lstatSync(directory)
-      if (!directoryItem.isDirectory() || directoryItem.isSymbolicLink()
-        || (CHECK_POSIX_MODE && (directoryItem.mode & 0o777) !== DIRECTORY_MODE)) {
+      if (!directoryItem.isDirectory() || directoryItem.isSymbolicLink()) {
         fail('checkpoint directory has unsafe type or mode')
+      }
+      // Mode drift is repairable, not corruption: chmod -R, sync clients, or
+      // a tighter umask tighten all three slots at once, and treating that
+      // as corruption would let later captures overwrite every one of them.
+      // Repair in place, following the ensureDirectory precedent.
+      if (CHECK_POSIX_MODE && (directoryItem.mode & 0o777) !== DIRECTORY_MODE) {
+        chmodDurableEntry(directory, DIRECTORY_MODE)
       }
       const value = readJson(join(directory, MANIFEST_FILENAME))
       if (value === null || typeof value !== 'object' || Array.isArray(value)) fail('checkpoint manifest is invalid')
@@ -894,8 +963,10 @@ export class DesktopProfileCheckpoint {
         const backup = filePath(directory, expected)
         if (item.present) {
           const backupItem = lstatSync(backup)
-          if (!backupItem.isFile() || backupItem.isSymbolicLink()
-            || (CHECK_POSIX_MODE && (backupItem.mode & 0o777) !== FILE_MODE)) fail(`checkpoint backup is unsafe: ${expected}`)
+          if (!backupItem.isFile() || backupItem.isSymbolicLink()) fail(`checkpoint backup is unsafe: ${expected}`)
+          // Same repair-not-destroy rule as the slot directory: mode drift
+          // on a backup file is repaired, never classified as corruption.
+          if (CHECK_POSIX_MODE && (backupItem.mode & 0o777) !== FILE_MODE) chmodDurableEntry(backup, FILE_MODE)
           const bytes = readFileSync(backup)
           if (bytes.byteLength !== item.size || hash(bytes) !== item.sha256) fail(`checkpoint backup is incomplete: ${expected}`)
         } else if (existsSync(backup)) fail(`checkpoint contains an unexpected backup: ${expected}`)

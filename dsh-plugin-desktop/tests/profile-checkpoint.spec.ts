@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -6,12 +7,14 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DesktopProfileCheckpoint,
@@ -210,6 +213,114 @@ describe('Desktop profile health checkpoints', () => {
       spy.mockRestore()
     }
     expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
+  })
+
+  it('propagates unrecognized errno conditions (ENOSPC) instead of self-healing over a good slot', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const proto = DesktopProfileCheckpoint.prototype as unknown as {
+      readSnapshot: (directory: string, requireComplete: boolean) => unknown
+    }
+    const spy = vi.spyOn(proto, 'readSnapshot').mockImplementation(function (this: DesktopProfileCheckpoint) {
+      // Disk full is not on any historical allowlist, yet the slot's bytes
+      // are intact; it must never be marked empty over an errno.
+      const cause = new Error('no space left on device') as NodeJS.ErrnoException
+      cause.code = 'ENOSPC'
+      throw cause
+    })
+    try {
+      expect(() => target.checkpoint.listSlots()).toThrow('no space left on device')
+    } finally {
+      spy.mockRestore()
+    }
+    expect(target.checkpoint.listSlots()[0]).toMatchObject({ snapshotExists: true })
+  })
+
+  it.skipIf(process.platform === 'win32')('repairs slot mode drift instead of losing the slot to an overwrite', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const slot = target.checkpoint.listSlots()[0]!
+    // Systematic drift (chmod -R, a sync client, a restore under a tighter
+    // umask) hits all three slots at once; repairing the modes beats
+    // classifying the slots as corruption, which would let the next healthy
+    // captures overwrite every one of them.
+    chmodSync(slot.snapshotDirectory, 0o755)
+    chmodSync(join(slot.snapshotDirectory, 'package.json'), 0o644)
+    chmodSync(join(slot.snapshotDirectory, 'manifest.json'), 0o644)
+
+    expect(target.checkpoint.listSlots()[0]).toMatchObject({ slotId: 'slot-1', snapshotExists: true })
+    expect(statSync(slot.snapshotDirectory).mode & 0o777).toBe(0o700)
+    expect(statSync(join(slot.snapshotDirectory, 'package.json')).mode & 0o777).toBe(0o600)
+    expect(target.checkpoint.restoreSlot('slot-1')).toMatchObject({ status: 'restored', slotId: 'slot-1' })
+  })
+
+  it.skipIf(process.platform === 'win32')('restores the mode captured at snapshot time over the current file mode', () => {
+    const target = fixture()
+    chmodSync(join(target.profile, 'package.json'), 0o640)
+    target.checkpoint.captureHealthy()
+    // Simulate the breakage that prompted the restore: mangled permissions.
+    chmodSync(join(target.profile, 'package.json'), 0o600)
+    expect(statSync(join(target.profile, 'package.json')).mode & 0o777).toBe(0o600)
+
+    expect(target.checkpoint.restoreSlot('slot-1')).toMatchObject({ status: 'restored', slotId: 'slot-1' })
+
+    expect(readFileSync(join(target.profile, 'package.json'), 'utf8')).toBe('{"name":"healthy-0"}\n')
+    expect(statSync(join(target.profile, 'package.json')).mode & 0o777).toBe(0o640)
+  })
+
+  it('sweeps only staging directories whose owning process is gone', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const profileRoot = dirname(target.checkpoint.listSlots()[0]!.snapshotDirectory)
+    // The live owner's staging directory stays in place; slot ids contain
+    // hyphens, so the pid segment must be parsed off the full prefix.
+    const live = join(profileRoot, `.staging-slot-1-${process.pid}-live`)
+    mkdirSync(live)
+    writeFileSync(join(live, 'marker'), 'in flight\n')
+    // A live sibling process's staging directory is equally in flight.
+    const sibling = spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], { stdio: 'ignore' })
+    const siblingStaging = join(profileRoot, `.staging-slot-1-${sibling.pid}-sibling`)
+    // Malformed owner segments never authorize a sweep, even when they
+    // numerically resolve to a dead pid.
+    const malformed = join(profileRoot, '.staging-slot-1-1e3-malformed')
+    // Find a pid that verifiably does not exist (ESRCH): EPERM counts as
+    // alive, matching the production probe.
+    let deadPid = process.pid + 1
+    for (; deadPid < process.pid + 10_000; deadPid += 1) {
+      try { process.kill(deadPid, 0) } catch (cause) {
+        if ((cause as NodeJS.ErrnoException | null)?.code === 'ESRCH') break
+      }
+    }
+    const dead = join(profileRoot, `.staging-slot-1-${deadPid}-dead`)
+    try {
+      mkdirSync(siblingStaging)
+      mkdirSync(malformed)
+      mkdirSync(dead)
+
+      target.checkpoint.listSlots()
+
+      expect(existsSync(live)).toBe(true)
+      expect(existsSync(join(live, 'marker'))).toBe(true)
+      expect(existsSync(siblingStaging)).toBe(true)
+      expect(existsSync(malformed)).toBe(true)
+      expect(existsSync(dead)).toBe(false)
+    } finally {
+      sibling.kill()
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')('repairs a write-only drifted backup through the owner chmod fallback', () => {
+    const target = fixture()
+    target.checkpoint.captureHealthy()
+    const slot = target.checkpoint.listSlots()[0]!
+    // A file drifted to write-only denies the O_NOFOLLOW read-open but is
+    // still owner-chmoddable; the fallback must repair instead of surfacing
+    // EACCES and blocking slot listing.
+    chmodSync(join(slot.snapshotDirectory, 'package.json'), 0o200)
+
+    expect(target.checkpoint.listSlots()[0]).toMatchObject({ slotId: 'slot-1', snapshotExists: true })
+    expect(statSync(join(slot.snapshotDirectory, 'package.json')).mode & 0o777).toBe(0o600)
+    expect(target.checkpoint.restoreSlot('slot-1')).toMatchObject({ status: 'restored', slotId: 'slot-1' })
   })
 
   it('restores an explicitly selected slot and skips exactly the next healthy write', () => {
